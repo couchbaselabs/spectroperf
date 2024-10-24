@@ -34,7 +34,6 @@ var numItems = 200000
 var numConc = 50000
 
 var randSeed = 11211
-var stopChan = make(chan os.Signal, 1)
 
 var collection gocb.Collection
 var scope gocb.Scope
@@ -42,10 +41,6 @@ var scope gocb.Scope
 type docType struct {
 	Name string
 	Data interface{}
-}
-
-type docid struct {
-	Id string `json:"id"`
 }
 
 type User struct {
@@ -101,7 +96,10 @@ func updateProfile(ctx context.Context, rctx runctx) {
 	}
 
 	var toUd User
-	result.Content(&toUd)
+	cerr := result.Content(&toUd)
+	if cerr != nil {
+		errors.Wrap(cerr, "Unable to load user into struct.")
+	}
 
 	toUd.Status = gofakeit.Paragraph(1, rctx.r.Intn(8)+1, rctx.r.Intn(12)+1, "\n")
 
