@@ -31,7 +31,7 @@ import (
 
 var numItems = 200000
 
-var numConc = 50000
+var numConc = 1024 // TODO: this is really a data load param
 
 var randSeed = 11211
 
@@ -105,7 +105,7 @@ func updateProfile(ctx context.Context, rctx runctx) {
 
 	_, uerr := collection.Upsert(p, toUd, nil)
 	if uerr != nil {
-		errors.Wrap(err, "Data load upsert failed.")
+		errors.Wrap(err, "Data load upsert failed.") // TODO: fix this error handling.  increment a stat or something?
 	}
 
 }

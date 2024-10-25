@@ -14,9 +14,7 @@
 package main
 
 import (
-	"crypto/x509"
 	"log"
-	"os"
 	"sync"
 	"time"
 
@@ -33,12 +31,16 @@ func init() {
 
 func main() {
 
-	caCert, err := os.ReadFile("rootCA.crt")
-	if err != nil {
-		log.Fatal(err)
-	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
+	// TODO: add a param to set this up if debugging gocb issues.  Probably with the system logger.
+	// gocb.SetLogger(gocb.VerboseStdioLogger())
+
+	// TODO: sometimes you need a cert for couchbase2://, and then need to laod it and pass it as part of the security config
+	// caCert, err := os.ReadFile("gateway-CA.crt")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// caCertPool := x509.NewCertPool()
+	// caCertPool.AppendCertsFromPEM(caCert)
 
 	// for _, url := range os.Args[1:] {
 	// 	local, n, err := fetch(url)
@@ -56,9 +58,10 @@ func main() {
 			Username: "Administrator",
 			Password: "password",
 		},
+		//		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: true},
 	}
 
-	cluster, err := gocb.Connect("couchbase://192.168.107.3:30690", opts)
+	cluster, err := gocb.Connect("couchbase://192.168.107.3:30690", opts) // TODO: need to be able to set pool size for GRPC.  But, gocb doesn't support that yet.  :(
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +77,7 @@ func main() {
 	zap.L().Info("Setting up for workload…\n")
 
 	// call the setup function on the workload.
-	workloads.Setup(200000, 50000, bucket.Scope("identity"), collection) // TODO: replace all of these arguments with CLI inputs or defaults
+	workloads.Setup(200000, 1024, bucket.Scope("identity"), collection) // TODO: replace all of these arguments with CLI inputs or defaults
 
 	time.Sleep(5 * time.Second)
 
