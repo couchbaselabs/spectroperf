@@ -31,7 +31,7 @@ import (
 
 var numItems = 200000
 
-var numConc = 50000
+var numConc = 1024 // TODO: this is really a data load param
 
 var randSeed = 11211
 

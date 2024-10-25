@@ -77,7 +77,7 @@ func main() {
 	zap.L().Info("Setting up for workload…\n")
 
 	// call the setup function on the workload.
-	workloads.Setup(200000, 50000, bucket.Scope("identity"), collection) // TODO: replace all of these arguments with CLI inputs or defaults
+	workloads.Setup(200000, 1024, bucket.Scope("identity"), collection) // TODO: replace all of these arguments with CLI inputs or defaults
 
 	time.Sleep(5 * time.Second)
 
