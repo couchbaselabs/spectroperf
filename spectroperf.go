@@ -17,9 +17,8 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"os"
-
 	"log"
+	"os"
 	"sync"
 	"time"
 
