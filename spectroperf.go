@@ -17,8 +17,9 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
-	"log"
 	"os"
+
+	"log"
 	"sync"
 	"time"
 
@@ -47,14 +48,16 @@ func main() {
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 
-	// for _, url := range os.Args[1:] {
-	// 	local, n, err := fetch(url)
-	// 	if err != nil {
-	// 		fmt.Fprintf(os.Stderr, "fetch %s: %v\n", url, err)
-	// 		continue
-	// 	}
-	// 	fmt.Fprintf(os.Stderr, "%s => %s (%d bytes).\n", url, local, n)
+	// TODO: add a param to set this up if debugging gocb issues.  Probably with the system logger.
+	// gocb.SetLogger(gocb.VerboseStdioLogger())
+
+	// TODO: sometimes you need a cert for couchbase2://, and then need to laod it and pass it as part of the security config
+	// caCert, err := os.ReadFile("gateway-CA.crt")
+	// if err != nil {
+	// 	log.Fatal(err)
 	// }
+	// caCertPool := x509.NewCertPool()
+	// caCertPool.AppendCertsFromPEM(caCert)
 
 	opts := gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
