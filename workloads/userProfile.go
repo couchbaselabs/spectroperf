@@ -105,7 +105,7 @@ func updateProfile(ctx context.Context, rctx runctx) {
 
 	_, uerr := collection.Upsert(p, toUd, nil)
 	if uerr != nil {
-		errors.Wrap(err, "Data load upsert failed.")
+		errors.Wrap(err, "Data load upsert failed.") // TODO: fix this error handling.  increment a stat or something?
 	}
 
 }
