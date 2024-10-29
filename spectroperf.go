@@ -15,6 +15,8 @@ package main
 
 import (
 	"crypto/x509"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -32,10 +34,15 @@ func init() {
 }
 
 func main() {
+	flags := parseFlags()
 
-	caCert, err := os.ReadFile("rootCA.crt")
+	if flags.connstr == "" {
+		zap.L().Fatal("No connection string provided")
+	}
+
+	caCert, err := os.ReadFile(flags.cert)
 	if err != nil {
-		log.Fatal(err)
+		zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
@@ -49,32 +56,30 @@ func main() {
 	// 	fmt.Fprintf(os.Stderr, "%s => %s (%d bytes).\n", url, local, n)
 	// }
 
-	bucketName := "data"
-
 	opts := gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
-			Username: "Administrator",
-			Password: "password",
+			Username: flags.username,
+			Password: flags.password,
 		},
 	}
 
-	cluster, err := gocb.Connect("couchbase://192.168.107.3:30690", opts)
+	cluster, err := gocb.Connect(flags.connstr, opts)
 	if err != nil {
-		panic(err)
+		log.Fatal(fmt.Sprintf("Failed to connect to cluster: %s", err))
 	}
 
-	bucket := cluster.Bucket(bucketName)
-	collection := bucket.Scope("identity").Collection("profiles")
+	bucket := cluster.Bucket(flags.bucket)
+	collection := bucket.Scope(flags.scope).Collection(flags.collection)
 
 	err = bucket.WaitUntilReady(5*time.Second, nil)
 	if err != nil {
-		log.Fatal(err)
+		zap.L().Fatal("Failed to connect to bucket", zap.String("bucket", flags.bucket), zap.String("error", err.Error()))
 	}
 
 	zap.L().Info("Setting up for workload…\n")
 
 	// call the setup function on the workload.
-	workloads.Setup(200000, 50000, bucket.Scope("identity"), collection) // TODO: replace all of these arguments with CLI inputs or defaults
+	workloads.Setup(flags.numItems, flags.numUsers, bucket.Scope(flags.scope), collection)
 
 	time.Sleep(5 * time.Second)
 
@@ -83,4 +88,34 @@ func main() {
 
 	wg.Wait()
 
+}
+
+type Flags struct {
+	connstr    string
+	cert       string
+	username   string
+	password   string
+	bucket     string
+	scope      string
+	collection string
+	numItems   int
+	numUsers   int
+}
+
+func parseFlags() Flags {
+	flags := Flags{}
+	flag.StringVar(&flags.connstr, "connstr", "", "connection string of the cluster under test")
+	flag.StringVar(&flags.cert, "cert", "rootCA.crt", "path to certificate file")
+	flag.StringVar(&flags.username, "username", "Administrator", "username for cluster under test")
+	flag.StringVar(&flags.password, "password", "password", "password of the cluster under test")
+	flag.StringVar(&flags.bucket, "bucket", "data", "bucket name")
+	flag.StringVar(&flags.scope, "scope", "identity", "scope name")
+	flag.StringVar(&flags.collection, "collection", "profiles", "collection name")
+	flag.IntVar(&flags.numItems, "num-items", 200000, "number of docs to create")
+	flag.IntVar(&flags.numUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
+	flag.Parse()
+
+	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
+
+	return flags
 }
