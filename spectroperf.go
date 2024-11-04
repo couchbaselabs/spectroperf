@@ -76,6 +76,8 @@ func main() {
 		zap.L().Fatal("Failed to connect to bucket", zap.String("bucket", flags.bucket), zap.String("error", err.Error()))
 	}
 
+	workloads.Init()
+
 	zap.L().Info("Setting up for workload…\n")
 
 	// call the setup function on the workload.

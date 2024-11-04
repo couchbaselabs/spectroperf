@@ -16,7 +16,11 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"log"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -28,6 +32,8 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
+
+var operations = []string{"fetchProfile", "updateProfile", "lockProfile", "findProfile", "findRelatedProfiles"}
 
 var numItems = 200000
 
@@ -60,10 +66,58 @@ type runctx struct {
 	l zap.Logger
 }
 
+var (
+	// Prometheus metrics for attempted and failed operations
+	opsAttempted = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "operations_total",
+			Help: "How many user operations are attempted, partitioned by operation.",
+		},
+		[]string{"operation"},
+	)
+	opsFailed = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "operations_failed_total",
+			Help: "How many user operations failed, partitioned by operation.",
+		},
+		[]string{"operation"},
+	)
+	opDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "operation_duration_milliseconds",
+			Help:    "Duration of user operations in milliseconds, partitioned by operation.",
+			Buckets: []float64{0.5, 1.0, 2.5, 5.0, 10.0, 15.0},
+		},
+		[]string{"operation"},
+	)
+
+	// Maps from the operation to an attempted/failed metric labelled with the operation
+	attemptMetrics  = map[string]prometheus.Counter{}
+	failedMetrics   = map[string]prometheus.Counter{}
+	durationMetrics = map[string]prometheus.Observer{}
+)
+
 // Init is called to set up any configuration required for later Setup and Run
 // functions in the workload.
 func Init() {
+	// Create a non-global registry.
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(opsAttempted)
+	reg.MustRegister(opsFailed)
+	reg.MustRegister(opDuration)
 
+	// Setup metrics
+	for _, operation := range operations {
+		attemptMetrics[operation] = opsAttempted.WithLabelValues(operation)
+		failedMetrics[operation] = opsFailed.WithLabelValues(operation)
+		durationMetrics[operation] = opDuration.WithLabelValues(operation)
+	}
+
+	// Expose metrics and custom registry via an HTTP server
+	go func() {
+		http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
+		log.Fatal(http.ListenAndServe(":2112", nil))
+	}()
 }
 
 // Setup does any scaffolding required given an environment.
@@ -80,47 +134,43 @@ func Setup(numItemsArg int, numConcArg int, scp *gocb.Scope, coll *gocb.Collecti
 }
 
 // Fetch a random profile in the range of profiles
-func fetchProfile(ctx context.Context, rctx runctx) {
-	rctx.l.Debug("fetchProfile")
+func fetchProfile(ctx context.Context, rctx runctx) error {
 	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems)))
 	_, err := collection.Get(p, &gocb.GetOptions{Context: ctx})
 	if err != nil {
-		rctx.l.Debug("Profile fetch failed.") // TODO: put the error in the logging somehow
+		return fmt.Errorf("profile fetch failed: %s", err.Error())
 	}
 	rctx.l.Sugar().Debugf("fetching profile %s", p)
+	return nil
 }
 
-func updateProfile(ctx context.Context, rctx runctx) {
-	zap.L().Debug("updateProfile")
+func updateProfile(ctx context.Context, rctx runctx) error {
 	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems))) // Question to self, should I instead just grab this from context?  probably.
 	result, err := collection.Get(p, nil)
 	if err != nil {
-		rctx.l.Debug("Profile fetch failed.", zap.Error(err))
-		return
+		return fmt.Errorf("profile fetch during update failed: %s", err.Error())
 	}
 
 	var toUd User
 	cerr := result.Content(&toUd)
 	if cerr != nil {
-		errors.Wrap(cerr, "Unable to load user into struct.")
+		return fmt.Errorf("unable to load user into struct: %s", cerr.Error())
 	}
 
 	toUd.Status = gofakeit.Paragraph(1, rctx.r.Intn(8)+1, rctx.r.Intn(12)+1, "\n")
 
 	_, uerr := collection.Upsert(p, toUd, nil)
 	if uerr != nil {
-		errors.Wrap(err, "Data load upsert failed.")
+		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
 	}
-
+	return nil
 }
 
-func lockProfile(ctx context.Context, rctx runctx) {
-	zap.L().Debug("lockProfile")
+func lockProfile(ctx context.Context, rctx runctx) error {
 	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems))) // Question to self, should I instead just grab this from context?  probably.
 	result, err := collection.Get(p, nil)
 	if err != nil {
-		rctx.l.Debug("Profile fetch failed.", zap.Error(err))
-		return
+		return fmt.Errorf("profile fetch during lock failed: %s", err.Error())
 	}
 
 	var toUd User
@@ -130,13 +180,12 @@ func lockProfile(ctx context.Context, rctx runctx) {
 
 	_, uerr := collection.Upsert(p, toUd, nil) // replace with replace or subdoc
 	if uerr != nil {
-		errors.Wrap(err, "Data load upsert failed.")
+		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
 	}
+	return nil
 }
 
-func findProfile(ctx context.Context, rctx runctx) {
-	zap.L().Debug("findProfile")
-
+func findProfile(ctx context.Context, rctx runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
 
 	query := "SELECT * FROM profiles WHERE Email LIKE $email LIMIT 1"
@@ -146,27 +195,27 @@ func findProfile(ctx context.Context, rctx runctx) {
 
 	rows, err := scope.Query(query, &gocb.QueryOptions{NamedParameters: params, Adhoc: true})
 	if err != nil {
-		rctx.l.Error("Query failed.", zap.Error(err)) // TODO: put the error in a stat
-		return
+		return fmt.Errorf("query failed: %s", err.Error())
 	}
 
 	for rows.Next() {
 		var resp UserQueryResponse
 		err := rows.Row(&resp)
 		if err != nil {
-			rctx.l.Error("Could not read next row.", zap.Error(err))
+			return fmt.Errorf("could not read next row: %s", err.Error())
 		}
 		rctx.l.Sugar().Debugf("Found a User: %+v", resp.Profiles)
 	}
 
 	err = rows.Err()
 	if err != nil {
-		rctx.l.Error("Had an error iterating the rows.", zap.Error(err))
+		return fmt.Errorf("error iterating the rows: %s", err.Error())
 	}
+	return nil
 }
 
-func findRelatedProfiles(ctx context.Context, rctx runctx) {
-	zap.L().Debug("findRelatedProfiles")
+func findRelatedProfiles(ctx context.Context, rctx runctx) error {
+	return nil
 
 	// toFind := gofakeit.Paragraph(1, 1, ctx.r.Intn(12)+1, "\n") // one sentence to search
 
@@ -210,7 +259,7 @@ func findRelatedProfiles(ctx context.Context, rctx runctx) {
 
 func Run(numConc int, runTime time.Duration) {
 	// Map of function names to functions
-	functions := map[string]func(ctx context.Context, rctx runctx){
+	functions := map[string]func(ctx context.Context, rctx runctx) error{
 		"fetchProfile":        fetchProfile,        // similar to login or looking at someone
 		"updateProfile":       updateProfile,       // updating a status on the profile
 		"lockProfile":         lockProfile,         // disable or enable a random profile (account lockout)
@@ -218,8 +267,7 @@ func Run(numConc int, runTime time.Duration) {
 		"findRelatedProfiles": findRelatedProfiles, // look for people with similar interests
 	}
 
-	// Operations and their corresponding indices
-	operations := []string{"fetchProfile", "updateProfile", "lockProfile", "findProfile", "findRelatedProfiles"}
+	// Map operations to their corresponding indices
 	operationIndices := map[string]int{}
 	for i, op := range operations {
 		operationIndices[op] = i
@@ -257,7 +305,15 @@ func Run(numConc int, runTime time.Duration) {
 
 }
 
-func runLoop(ctx context.Context, probabilities [][]float64, functions map[string]func(context.Context, runctx), operations []string, runTime time.Duration, runnerId int, wg *sync.WaitGroup) {
+func runLoop(
+	ctx context.Context,
+	probabilities [][]float64,
+	functions map[string]func(context.Context, runctx) error,
+	operations []string,
+	runTime time.Duration,
+	runnerId int,
+	wg *sync.WaitGroup) {
+
 	// Current operation index
 	currOpIndex := 0
 
@@ -287,7 +343,20 @@ func runLoop(ctx context.Context, probabilities [][]float64, functions map[strin
 			// Get the next operation index based on probabilities
 			nextOpIndex := getNextOperation(currOpIndex, probabilities, r)
 			// call the next function
-			functions[operations[nextOpIndex]](ctx, runCtx)
+			nextFunction := operations[nextOpIndex]
+			slog.Debug(nextFunction)
+			attemptMetrics[nextFunction].Inc()
+
+			start := time.Now()
+			err := functions[operations[nextOpIndex]](ctx, runCtx)
+			duration := time.Now().Sub(start)
+			durationMetrics[nextFunction].Observe(float64(duration.Microseconds()) / 1000)
+
+			if err != nil {
+				slog.Debug("operation failed", zap.String("operation", nextFunction), zap.Error(err))
+				failedMetrics[nextFunction].Inc()
+			}
+
 			// update for next time
 			currOpIndex = nextOpIndex
 			// sleep a random amount of time
