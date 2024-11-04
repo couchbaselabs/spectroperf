@@ -81,7 +81,7 @@ func main() {
 	zap.L().Info("Setting up for workload…\n")
 
 	// call the setup function on the workload.
-	workloads.Setup(flags.numItems, flags.numUsers, bucket.Scope(flags.scope), collection)
+	workloads.Setup(flags.numItems, flags.numUsers, bucket.Scope(flags.scope), collection, flags.dapiConnstr, flags.username, flags.password)
 
 	time.Sleep(5 * time.Second)
 
@@ -93,20 +93,22 @@ func main() {
 }
 
 type Flags struct {
-	connstr    string
-	cert       string
-	username   string
-	password   string
-	bucket     string
-	scope      string
-	collection string
-	numItems   int
-	numUsers   int
+	connstr     string
+	dapiConnstr string
+	cert        string
+	username    string
+	password    string
+	bucket      string
+	scope       string
+	collection  string
+	numItems    int
+	numUsers    int
 }
 
 func parseFlags() Flags {
 	flags := Flags{}
 	flag.StringVar(&flags.connstr, "connstr", "", "connection string of the cluster under test")
+	flag.StringVar(&flags.dapiConnstr, "dapi-connstr", "", "connection for data api")
 	flag.StringVar(&flags.cert, "cert", "rootCA.crt", "path to certificate file")
 	flag.StringVar(&flags.username, "username", "Administrator", "username for cluster under test")
 	flag.StringVar(&flags.password, "password", "password", "password of the cluster under test")
