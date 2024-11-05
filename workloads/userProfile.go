@@ -51,6 +51,10 @@ type User struct {
 	Enabled bool
 }
 
+type UserQueryResponse struct {
+	Profiles User
+}
+
 type runctx struct {
 	r rand.Rand
 	l zap.Logger
@@ -147,12 +151,12 @@ func findProfile(ctx context.Context, rctx runctx) {
 	}
 
 	for rows.Next() {
-		var u User
-		err := rows.Row(&u)
+		var resp UserQueryResponse
+		err := rows.Row(&resp)
 		if err != nil {
 			rctx.l.Error("Could not read next row.", zap.Error(err))
 		}
-		rctx.l.Sugar().Debugf("Found a User: %s", u)
+		rctx.l.Sugar().Debugf("Found a User: %+v", resp.Profiles)
 	}
 
 	err = rows.Err()
