@@ -16,6 +16,7 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"github.com/couchbaselabs/spectroperf/workloads/userClient"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"log"
@@ -43,22 +44,11 @@ var randSeed = 11211
 
 var collection gocb.Collection
 var scope gocb.Scope
+var client userClient.UserClient
 
 type docType struct {
 	Name string
 	Data interface{}
-}
-
-type User struct {
-	Name    string
-	Email   string
-	Created time.Time
-	Status  string
-	Enabled bool
-}
-
-type UserQueryResponse struct {
-	Profiles User
 }
 
 type runctx struct {
@@ -122,11 +112,17 @@ func Init() {
 
 // Setup does any scaffolding required given an environment.
 // For example, load the base data needed for the test.
-func Setup(numItemsArg int, numConcArg int, scp *gocb.Scope, coll *gocb.Collection) {
+func Setup(numItemsArg int, numConcArg int, scp *gocb.Scope, coll *gocb.Collection, dataApiConnstr string, usr string, pass string) {
 	scope = *scp
 	collection = *coll
 	numItems = numItemsArg
 	numConc = numConcArg
+
+	if dataApiConnstr != "" {
+		client = userClient.NewDapiClient(dataApiConnstr, scope.BucketName(), scope.Name(), collection.Name(), usr, pass)
+	} else {
+		client = userClient.NewSdkClient(scope, collection)
+	}
 
 	// TODO: set up the FTS index for the 'find related'
 
@@ -136,125 +132,61 @@ func Setup(numItemsArg int, numConcArg int, scp *gocb.Scope, coll *gocb.Collecti
 // Fetch a random profile in the range of profiles
 func fetchProfile(ctx context.Context, rctx runctx) error {
 	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems)))
-	_, err := collection.Get(p, &gocb.GetOptions{Context: ctx})
-	if err != nil {
-		return fmt.Errorf("profile fetch failed: %s", err.Error())
-	}
 	rctx.l.Sugar().Debugf("fetching profile %s", p)
+
+	_, err := client.GetUser(ctx, p)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
+// Fetch a random profile, update the status then update the changed user
 func updateProfile(ctx context.Context, rctx runctx) error {
 	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems))) // Question to self, should I instead just grab this from context?  probably.
-	result, err := collection.Get(p, nil)
+	toUd, err := client.GetUser(ctx, p)
 	if err != nil {
-		return fmt.Errorf("profile fetch during update failed: %s", err.Error())
-	}
-
-	var toUd User
-	cerr := result.Content(&toUd)
-	if cerr != nil {
-		return fmt.Errorf("unable to load user into struct: %s", cerr.Error())
+		return err
 	}
 
 	toUd.Status = gofakeit.Paragraph(1, rctx.r.Intn(8)+1, rctx.r.Intn(12)+1, "\n")
-
-	_, uerr := collection.Upsert(p, toUd, nil)
-	if uerr != nil {
-		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
-	}
-	return nil
+	return client.UpsertUser(ctx, p, *toUd)
 }
 
+// Fetch and lock a random user profile
 func lockProfile(ctx context.Context, rctx runctx) error {
 	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems))) // Question to self, should I instead just grab this from context?  probably.
-	result, err := collection.Get(p, nil)
+	user, err := client.GetUser(ctx, p)
 	if err != nil {
-		return fmt.Errorf("profile fetch during lock failed: %s", err.Error())
+		return err
 	}
 
-	var toUd User
-	result.Content(&toUd)
+	user.Enabled = false
 
-	toUd.Enabled = false
-
-	_, uerr := collection.Upsert(p, toUd, nil) // replace with replace or subdoc
-	if uerr != nil {
-		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
-	}
-	return nil
+	return client.UpsertUser(ctx, p, *user)
 }
 
+// Find a user profile using a n1ql query
 func findProfile(ctx context.Context, rctx runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
+	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE Email LIKE '%s' LIMIT 1", scope.BucketName(), scope.Name(), collection.Name(), toFind)
 
-	query := "SELECT * FROM profiles WHERE Email LIKE $email LIMIT 1"
-	rctx.l.Sugar().Debugf("Querying with %s using param %s", query, toFind)
-	params := make(map[string]interface{}, 1)
-	params["email"] = toFind
+	rctx.l.Sugar().Debugf("Running query: '%s'", query)
 
-	rows, err := scope.Query(query, &gocb.QueryOptions{NamedParameters: params, Adhoc: true})
+	user, err := client.FindUser(ctx, query)
 	if err != nil {
-		return fmt.Errorf("query failed: %s", err.Error())
+		return err
 	}
 
-	for rows.Next() {
-		var resp UserQueryResponse
-		err := rows.Row(&resp)
-		if err != nil {
-			return fmt.Errorf("could not read next row: %s", err.Error())
-		}
-		rctx.l.Sugar().Debugf("Found a User: %+v", resp.Profiles)
-	}
+	rctx.l.Sugar().Debugf("Found a User: %+v", user)
 
-	err = rows.Err()
-	if err != nil {
-		return fmt.Errorf("error iterating the rows: %s", err.Error())
-	}
 	return nil
 }
 
 func findRelatedProfiles(ctx context.Context, rctx runctx) error {
+	// TODO - implement
 	return nil
-
-	// toFind := gofakeit.Paragraph(1, 1, ctx.r.Intn(12)+1, "\n") // one sentence to search
-
-	// ctx.l.Sugar().Debugf("Searching for related profiles with string %s", toFind)
-	// params := make(map[string]interface{}, 1)
-	// params["email"] = toFind
-
-	// matchResult, err := scope.Search(
-	// 	"profile-statuses",
-	// 	search.NewMatchQuery(tofind),
-	// 	&gocb.SearchOptions{
-	// 		Limit:  10,
-	// 		Fields: []string{"description"},
-	// 	},
-	// )
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// for matchResult.Next() {
-	// 	row := matchResult.Row()
-	// 	docID := row.ID
-	// 	score := row.Score
-
-	// 	var fields interface{}
-	// 	err := row.Fields(&fields)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-
-	// 	fmt.Printf("Document ID: %s, search score: %f, fields included in result: %v\n", docID, score, fields)
-	// }
-
-	// // always check for errors after iterating
-	// err = matchResult.Err()
-	// if err != nil {
-	// 	panic(err)
-	// }
-
 }
 
 func Run(numConc int, runTime time.Duration) {
@@ -416,7 +348,7 @@ func loadData() {
 	// Create a random document with a realistic size from name, email, status text and whether
 	// or not the account is enabled.
 	for i := 0; i < numItems; i++ {
-		iu := User{
+		iu := userClient.User{
 			Name:    gofakeit.Name(),
 			Email:   gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
 			Created: gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
