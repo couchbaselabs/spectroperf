@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,6 +62,8 @@ func main() {
 			Username: flags.username,
 			Password: flags.password,
 		},
+		// Need to disable TLS verification if using CNG with IP addresses and not hostnames with Subject Alternate Names
+		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: strings.Contains(flags.connstr, "couchbase2")},
 	}
 
 	cluster, err := gocb.Connect(flags.connstr, opts)
