@@ -61,6 +61,7 @@ func main() {
 			Username: flags.username,
 			Password: flags.password,
 		},
+		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: flags.tlsSkipVerify},
 	}
 
 	cluster, err := gocb.Connect(flags.connstr, opts)
@@ -93,15 +94,16 @@ func main() {
 }
 
 type Flags struct {
-	connstr    string
-	cert       string
-	username   string
-	password   string
-	bucket     string
-	scope      string
-	collection string
-	numItems   int
-	numUsers   int
+	connstr       string
+	cert          string
+	username      string
+	password      string
+	bucket        string
+	scope         string
+	collection    string
+	numItems      int
+	numUsers      int
+	tlsSkipVerify bool
 }
 
 func parseFlags() Flags {
@@ -115,6 +117,7 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.collection, "collection", "profiles", "collection name")
 	flag.IntVar(&flags.numItems, "num-items", 200000, "number of docs to create")
 	flag.IntVar(&flags.numUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
+	flag.BoolVar(&flags.tlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
 	flag.Parse()
 
 	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
