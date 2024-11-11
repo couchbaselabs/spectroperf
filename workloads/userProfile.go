@@ -35,9 +35,9 @@ import (
 
 var operations = []string{"fetchProfile", "updateProfile", "lockProfile", "findProfile", "findRelatedProfiles"}
 
-var numItems = 200000
+var numConc = 2000
 
-var numConc = 50000
+var numUsers = 50000
 
 var randSeed = 11211
 
@@ -122,11 +122,10 @@ func Init() {
 
 // Setup does any scaffolding required given an environment.
 // For example, load the base data needed for the test.
-func Setup(numItemsArg int, numConcArg int, scp *gocb.Scope, coll *gocb.Collection) {
+func Setup(numUsersArg int, scp *gocb.Scope, coll *gocb.Collection) {
 	scope = *scp
 	collection = *coll
-	numItems = numItemsArg
-	numConc = numConcArg
+	numUsers = numUsersArg
 
 	// TODO: set up the FTS index for the 'find related'
 
@@ -135,7 +134,7 @@ func Setup(numItemsArg int, numConcArg int, scp *gocb.Scope, coll *gocb.Collecti
 
 // Fetch a random profile in the range of profiles
 func fetchProfile(ctx context.Context, rctx runctx) error {
-	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems)))
+	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numUsers)))
 	_, err := collection.Get(p, &gocb.GetOptions{Context: ctx})
 	if err != nil {
 		return fmt.Errorf("profile fetch failed: %s", err.Error())
@@ -145,7 +144,7 @@ func fetchProfile(ctx context.Context, rctx runctx) error {
 }
 
 func updateProfile(ctx context.Context, rctx runctx) error {
-	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems))) // Question to self, should I instead just grab this from context?  probably.
+	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numUsers))) // Question to self, should I instead just grab this from context?  probably.
 	result, err := collection.Get(p, nil)
 	if err != nil {
 		return fmt.Errorf("profile fetch during update failed: %s", err.Error())
@@ -167,7 +166,7 @@ func updateProfile(ctx context.Context, rctx runctx) error {
 }
 
 func lockProfile(ctx context.Context, rctx runctx) error {
-	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numItems))) // Question to self, should I instead just grab this from context?  probably.
+	p := fmt.Sprintf("u%d", rctx.r.Int31n(int32(numUsers))) // Question to self, should I instead just grab this from context?  probably.
 	result, err := collection.Get(p, nil)
 	if err != nil {
 		return fmt.Errorf("profile fetch during lock failed: %s", err.Error())
@@ -296,8 +295,8 @@ func Run(numConc int, runTime time.Duration) {
 	// Create a work group of goroutine runners sharing the same probabilities.
 	var wg sync.WaitGroup
 
-	wg.Add(numConc)
-	for i := 0; i < numConc; i++ {
+	wg.Add(numUsers)
+	for i := 0; i < numUsers; i++ {
 		go runLoop(ctx, probabilities, functions, operations, runTime, i, &wg)
 	}
 
@@ -357,7 +356,7 @@ func runLoop(
 			durationMetrics[nextFunction].Observe(float64(duration.Microseconds()) / 1000)
 
 			if err != nil {
-				slog.Debug("operation failed", zap.String("operation", nextFunction), zap.Error(err))
+				slog.Error("operation failed", zap.String("operation", nextFunction), zap.Error(err))
 				failedMetrics[nextFunction].Inc()
 			}
 
@@ -400,7 +399,7 @@ func loadData() {
 				case doc := <-workChan:
 					_, err := collection.Upsert(doc.Name, doc.Data, nil)
 					if err != nil {
-						errors.Wrap(err, "Data load upsert failed.")
+						zap.L().Error(errors.Wrap(err, "Data load upsert failed.").Error())
 					}
 				case <-shutdownChan:
 					wg.Done()
@@ -416,7 +415,7 @@ func loadData() {
 
 	// Create a random document with a realistic size from name, email, status text and whether
 	// or not the account is enabled.
-	for i := 0; i < numItems; i++ {
+	for i := 0; i < numUsers; i++ {
 		iu := User{
 			Name:    gofakeit.Name(),
 			Email:   gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)

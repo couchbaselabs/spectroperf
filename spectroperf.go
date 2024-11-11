@@ -82,7 +82,7 @@ func main() {
 	zap.L().Info("Setting up for workload…\n")
 
 	// call the setup function on the workload.
-	workloads.Setup(flags.numItems, flags.numUsers, bucket.Scope(flags.scope), collection)
+	workloads.Setup(flags.numUsers, bucket.Scope(flags.scope), collection)
 
 	time.Sleep(5 * time.Second)
 
@@ -101,7 +101,6 @@ type Flags struct {
 	bucket        string
 	scope         string
 	collection    string
-	numItems      int
 	numUsers      int
 	tlsSkipVerify bool
 }
@@ -115,7 +114,6 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.bucket, "bucket", "data", "bucket name")
 	flag.StringVar(&flags.scope, "scope", "identity", "scope name")
 	flag.StringVar(&flags.collection, "collection", "profiles", "collection name")
-	flag.IntVar(&flags.numItems, "num-items", 200000, "number of docs to create")
 	flag.IntVar(&flags.numUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
 	flag.BoolVar(&flags.tlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
 	flag.Parse()
