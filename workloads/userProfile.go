@@ -347,6 +347,10 @@ func runLoop(
 			slog.Debug(nextFunction)
 			attemptMetrics[nextFunction].Inc()
 
+			// sleep a random amount of time
+			t := r.Int31n(5000-400) + 400
+			time.Sleep(time.Duration(t) * time.Millisecond)
+
 			start := time.Now()
 			err := functions[operations[nextOpIndex]](ctx, runCtx)
 			duration := time.Now().Sub(start)
@@ -359,9 +363,6 @@ func runLoop(
 
 			// update for next time
 			currOpIndex = nextOpIndex
-			// sleep a random amount of time
-			t := r.Int31n(5000-400) + 400
-			time.Sleep(time.Duration(t) * time.Millisecond)
 		}
 	}
 }
