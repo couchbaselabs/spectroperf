@@ -86,7 +86,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    "operation_duration_milliseconds",
 			Help:    "Duration of user operations in milliseconds, partitioned by operation.",
-			Buckets: []float64{0.5, 1.0, 2.5, 5.0, 10.0, 15.0},
+			Buckets: []float64{25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 1500.0},
 		},
 		[]string{"operation"},
 	)
