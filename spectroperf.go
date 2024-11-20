@@ -23,7 +23,8 @@ import (
 	"time"
 
 	"github.com/couchbase/gocb/v2"
-	"github.com/couchbaselabs/spectroperf/workloads"
+	"github.com/couchbaselabs/spectroperf/workload"
+	"github.com/couchbaselabs/spectroperf/workload/workloads"
 	"go.uber.org/zap"
 )
 
@@ -79,17 +80,25 @@ func main() {
 		zap.L().Fatal("Failed to connect to bucket", zap.String("bucket", flags.bucket), zap.String("error", err.Error()))
 	}
 
-	workloads.Init()
+	var w workload.Workload
+	switch flags.workload {
+	case "user-profile":
+		w = workloads.NewUserProfile(flags.numItems, bucket.Scope(flags.scope), collection)
+	default:
+		zap.L().Fatal("Unknown workload type", zap.String("workload", flags.workload))
+	}
 
-	zap.L().Info("Setting up for workload…\n")
+	workload.InitMetrics(w)
+
+	zap.L().Info("Setting up for workload", zap.String("workload", flags.workload))
 
 	// call the setup function on the workload.
-	workloads.Setup(flags.numItems, flags.numUsers, bucket.Scope(flags.scope), collection)
+	workload.Setup(w, flags.numItems, bucket.Scope(flags.scope), collection)
 
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workloads.Run(128, time.Duration(5)*time.Minute)
+	workload.Run(w, flags.numUsers, time.Duration(5)*time.Minute)
 
 	wg.Wait()
 
@@ -106,6 +115,7 @@ type Flags struct {
 	numItems      int
 	numUsers      int
 	tlsSkipVerify bool
+	workload      string
 }
 
 func parseFlags() Flags {
@@ -120,6 +130,7 @@ func parseFlags() Flags {
 	flag.IntVar(&flags.numItems, "num-items", 200000, "number of docs to create")
 	flag.IntVar(&flags.numUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
 	flag.BoolVar(&flags.tlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
+	flag.StringVar(&flags.workload, "workload", "", "workload name")
 	flag.Parse()
 
 	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
