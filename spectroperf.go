@@ -84,6 +84,8 @@ func main() {
 	switch flags.workload {
 	case "user-profile":
 		w = workloads.NewUserProfile(flags.numItems, bucket.Scope(flags.scope), collection)
+	case "user-profile-dapi":
+		w = workloads.NewUserProfileDapi(flags.dapiConnstr, flags.bucket, flags.scope, flags.collection, flags.numItems, flags.username, flags.password)
 	default:
 		zap.L().Fatal("Unknown workload type", zap.String("workload", flags.workload))
 	}
@@ -116,6 +118,7 @@ type Flags struct {
 	numUsers      int
 	tlsSkipVerify bool
 	workload      string
+	dapiConnstr   string
 }
 
 func parseFlags() Flags {
@@ -131,6 +134,7 @@ func parseFlags() Flags {
 	flag.IntVar(&flags.numUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
 	flag.BoolVar(&flags.tlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
 	flag.StringVar(&flags.workload, "workload", "", "workload name")
+	flag.StringVar(&flags.dapiConnstr, "dapi-connstr", "", "connection string for data api")
 	flag.Parse()
 
 	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
