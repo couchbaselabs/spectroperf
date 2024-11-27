@@ -45,9 +45,14 @@ func InitMetrics(w Workload) {
 
 	// Setup metrics
 	for _, operation := range w.Operations() {
-		attemptMetrics[operation] = opsAttempted.WithLabelValues(operation)
-		failedMetrics[operation] = opsFailed.WithLabelValues(operation)
-		durationMetrics[operation] = opDuration.WithLabelValues(operation)
+		attemptMetrics[operation] = map[string]prometheus.Counter{}
+		failedMetrics[operation] = map[string]prometheus.Counter{}
+		durationMetrics[operation] = map[string]prometheus.Observer{}
+		for _, state := range States {
+			attemptMetrics[operation][state] = opsAttempted.WithLabelValues(operation, state)
+			failedMetrics[operation][state] = opsFailed.WithLabelValues(operation, state)
+			durationMetrics[operation][state] = opDuration.WithLabelValues(operation, state)
+		}
 	}
 
 	// Expose metrics and custom registry via an HTTP server
@@ -87,7 +92,7 @@ func Setup(w Workload, numItemsArg int, scp *gocb.Scope, coll *gocb.Collection) 
 		workChan <- w.GenerateDocument(fmt.Sprintf("u%d", i))
 	}
 
-	// Call the worloads own Setup function to perform any workload specific setup
+	// Call the workloads own Setup function to perform any workload specific setup
 	err := w.Setup()
 	if err != nil {
 		panic(errors.Wrap(err, "failed to setup workload"))
@@ -137,6 +142,8 @@ func runLoop(
 	slog := zap.L().Sugar()
 
 	slog.Debugf("Starting runner %d…", runnerId)
+	runStart := time.Now()
+	runEnd := runStart.Add(runTime)
 
 	var runCtx Runctx
 	runCtx.r = *r
@@ -157,20 +164,22 @@ func runLoop(
 			// call the next function
 			nextFunction := operations[nextOpIndex]
 			slog.Debug(nextFunction)
-			attemptMetrics[nextFunction].Inc()
 
 			// sleep a random amount of time
 			t := r.Int31n(5000-400) + 400
 			time.Sleep(time.Duration(t) * time.Millisecond)
 
+			state := MetricState(runStart, runEnd)
+			attemptMetrics[nextFunction][state].Inc()
+
 			start := time.Now()
 			err := functions[operations[nextOpIndex]](ctx, runCtx)
 			duration := time.Now().Sub(start)
-			durationMetrics[nextFunction].Observe(float64(duration.Microseconds()) / 1000)
+			durationMetrics[nextFunction][state].Observe(float64(duration.Microseconds()) / 1000)
 
 			if err != nil {
 				slog.Error("operation failed", zap.String("operation", nextFunction), zap.Error(err))
-				failedMetrics[nextFunction].Inc()
+				failedMetrics[nextFunction][state].Inc()
 			}
 
 			// update for next time
