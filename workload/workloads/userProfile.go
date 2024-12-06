@@ -77,7 +77,17 @@ func (w userProfile) Probabilities() [][]float64 {
 func (w userProfile) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	return createFtsIndex(w.scope)
+	err := createFtsIndex(w.scope)
+	if err != nil {
+		return err
+	}
+
+	err = createQueryIndex(w.collection)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func createFtsIndex(scope *gocb.Scope) error {
@@ -128,6 +138,19 @@ func createFtsIndex(scope *gocb.Scope) error {
 	err = mgr.UpsertIndex(upsertIndex, nil)
 	if err != nil {
 		return errors.Wrap(err, "Creation of fts index failed")
+	}
+
+	return nil
+}
+
+func createQueryIndex(collection *gocb.Collection) error {
+	mgr := collection.QueryIndexes()
+	err := mgr.CreateIndex("eMailIndex", []string{"Email"}, &gocb.CreateQueryIndexOptions{
+		IgnoreIfExists: true,
+	})
+
+	if err != nil {
+		return errors.Wrap(err, "failed to create eMailIndex")
 	}
 
 	return nil
