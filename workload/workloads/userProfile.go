@@ -2,15 +2,12 @@ package workloads
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/brianvoe/gofakeit"
 	"github.com/couchbase/gocb/v2"
-	"github.com/couchbase/gocb/v2/search"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/pkg/errors"
 	"math/rand"
-	"strings"
 	"time"
 )
 
@@ -77,57 +74,22 @@ func (w userProfile) Probabilities() [][]float64 {
 func (w userProfile) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	return createFtsIndex(w.scope)
+	err := createQueryIndex(w.collection)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func createFtsIndex(scope *gocb.Scope) error {
-	mgr := scope.SearchIndexes()
-	_, err := mgr.GetIndex("profile-statuses", nil)
-	if err == nil {
-		return nil
-	}
+func createQueryIndex(collection *gocb.Collection) error {
+	mgr := collection.QueryIndexes()
+	err := mgr.CreateIndex("eMailIndex", []string{"Email"}, &gocb.CreateQueryIndexOptions{
+		IgnoreIfExists: true,
+	})
 
-	if !strings.Contains(err.Error(), "index not found") {
-		return errors.Wrap(err, "Failed to check if fts index has already been created")
-	}
-
-	index_definition := []byte(`{
-	 "name": "profile-statuses",
-	 "type": "fulltext-index",
-	 "params": {
-	  "doc_config": {
-	   "docid_prefix_delim": "",
-	   "docid_regexp": "",
-	   "mode": "scope.collection.type_field",
-	   "type_field": "type"
-	  },
-	  "mapping": {
-	   "default_mapping": {
-		"dynamic": true,
-		"enabled": false
-	   },
-	   "store_dynamic": true,
-	   "types": {
-		"identity.profiles": {
-		 "dynamic": true,
-		 "enabled": true
-		}
-	   }
-	  }
-	 },
-	 "sourceType": "gocbcore",
-	 "sourceName": "data"
-	}`)
-
-	var upsertIndex gocb.SearchIndex
-	err = json.Unmarshal(index_definition, &upsertIndex)
 	if err != nil {
-		return errors.Wrap(err, "Unmarshalling fts index definition failed")
-	}
-
-	err = mgr.UpsertIndex(upsertIndex, nil)
-	if err != nil {
-		return errors.Wrap(err, "Creation of fts index failed")
+		return errors.Wrap(err, "failed to create eMailIndex")
 	}
 
 	return nil
@@ -228,42 +190,43 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 }
 
 func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runctx) error {
-	toFind := gofakeit.Paragraph(1, 1, rctx.Rand().Intn(12)+1, "\n") // one sentence to search
-
-	rctx.Logger().Sugar().Debugf("Searching for related profiles with string %s", toFind)
-	params := make(map[string]interface{}, 1)
-	params["email"] = toFind
-
-	matchResult, err := w.scope.Search(
-		"profile-statuses",
-		gocb.SearchRequest{SearchQuery: search.NewMatchQuery(toFind)},
-		&gocb.SearchOptions{
-			Limit:  10,
-			Fields: []string{"Status"},
-		},
-	)
-	if err != nil {
-		panic(err)
-	}
-
-	for matchResult.Next() {
-		row := matchResult.Row()
-		docID := row.ID
-		score := row.Score
-
-		var fields interface{}
-		err := row.Fields(&fields)
-		if err != nil {
-			panic(err)
-		}
-
-		rctx.Logger().Sugar().Debugf("Document ID: %s, search score: %f, fields included in result: %v\n", docID, score, fields)
-	}
-
-	err = matchResult.Err()
-	if err != nil {
-		panic(err)
-	}
-
 	return nil
+
+	// toFind := gofakeit.Paragraph(1, 1, ctx.r.Intn(12)+1, "\n") // one sentence to search
+
+	// ctx.l.Sugar().Debugf("Searching for related profiles with string %s", toFind)
+	// params := make(map[string]interface{}, 1)
+	// params["email"] = toFind
+
+	// matchResult, err := scope.Search(
+	// 	"profile-statuses",
+	// 	search.NewMatchQuery(tofind),
+	// 	&gocb.SearchOptions{
+	// 		Limit:  10,
+	// 		Fields: []string{"description"},
+	// 	},
+	// )
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// for matchResult.Next() {
+	// 	row := matchResult.Row()
+	// 	docID := row.ID
+	// 	score := row.Score
+
+	// 	var fields interface{}
+	// 	err := row.Fields(&fields)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+
+	// 	fmt.Printf("Document ID: %s, search score: %f, fields included in result: %v\n", docID, score, fields)
+	// }
+
+	// // always check for errors after iterating
+	// err = matchResult.Err()
+	// if err != nil {
+	// 	panic(err)
+	// }
 }
