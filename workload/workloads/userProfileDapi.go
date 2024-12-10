@@ -112,7 +112,7 @@ func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx)
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
 	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to build profile fetch request: %s", err.Error())
+		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
 
 	resp, err := w.executeRequest(req)
@@ -139,7 +139,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
 	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to build profile fetch request: %s", err.Error())
+		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
 
 	resp, err := w.executeRequest(req)
@@ -167,7 +167,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 
 	req, err = http.NewRequest("PUT", requestURL, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		return fmt.Errorf("failed to build profile update request: %s", err.Error())
+		panic(fmt.Errorf("failed to build profile update request: %s", err.Error()))
 	}
 
 	_, err = w.executeRequest(req)
@@ -183,7 +183,7 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
 	req, err := http.NewRequest("GET", requestURL, nil)
 	if err != nil {
-		return fmt.Errorf("failed to build profile fetch request: %s", err.Error())
+		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
 
 	resp, err := w.executeRequest(req)
@@ -211,7 +211,7 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 
 	req, err = http.NewRequest("PUT", requestURL, bytes.NewBuffer(jsonBytes))
 	if err != nil {
-		return fmt.Errorf("failed to build profile update request: %s", err.Error())
+		panic(fmt.Errorf("failed to build profile update request: %s", err.Error()))
 	}
 
 	_, err = w.executeRequest(req)
@@ -240,7 +240,7 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 
 	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(body))
 	if err != nil {
-		return fmt.Errorf("failed to build profile fetch request: %s", err.Error())
+		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
 
 	req.Header.Set("Content-Type", "application/json")
