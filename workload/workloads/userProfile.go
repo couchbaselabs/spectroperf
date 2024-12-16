@@ -144,7 +144,7 @@ func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) erro
 func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
 
-	query := "SELECT * FROM profiles WHERE Email LIKE $email LIMIT 1"
+	query := "SELECT meta().id FROM profiles WHERE Email LIKE $email LIMIT 1"
 	rctx.Logger().Sugar().Debugf("Querying with %s using param %s", query, toFind)
 	params := make(map[string]interface{}, 1)
 	params["email"] = toFind
