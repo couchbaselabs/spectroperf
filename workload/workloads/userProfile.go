@@ -6,6 +6,7 @@ import (
 	"github.com/brianvoe/gofakeit"
 	"github.com/couchbase/gocb/v2"
 	"github.com/couchbaselabs/spectroperf/workload"
+	"github.com/pkg/errors"
 	"math/rand"
 	"time"
 )
@@ -71,8 +72,26 @@ func (w userProfile) Probabilities() [][]float64 {
 }
 
 func (w userProfile) Setup() error {
-	// TODO setup FTS index here for findRelatedProfile
 	gofakeit.Seed(int64(workload.RandSeed))
+
+	err := createQueryIndex(w.collection)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func createQueryIndex(collection *gocb.Collection) error {
+	mgr := collection.QueryIndexes()
+	err := mgr.CreateIndex("eMailIndex", []string{"Email"}, &gocb.CreateQueryIndexOptions{
+		IgnoreIfExists: true,
+	})
+
+	if err != nil {
+		return errors.Wrap(err, "failed to create eMailIndex")
+	}
+
 	return nil
 }
 
@@ -210,5 +229,4 @@ func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runc
 	// if err != nil {
 	// 	panic(err)
 	// }
-
 }
