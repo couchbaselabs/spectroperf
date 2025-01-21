@@ -59,6 +59,36 @@ Operation types
 * findProfile,         // find a profile by a secondary index (email address)
 * findRelatedProfiles, // look for people with similar interests
 
+## Usage
+
+The simplest command to run Spectroperf against your Couchbase cluster is: 
+
+```
+go run spectroperf.go --connstr <cluster-connection-string> --workload user-profile
+```
+
+This will run Spectroperf against the given cluster, with the user-profile workload with default settings for all optional flags. 
+The optional flags are as follows: 
+
+* `--bucket`: needs to be created manually by the User, defaults to `data`
+* `--scope`:  needs to be created manually by the User, defaults to `identitiy`
+* `--collection`: needs to be created manually by the User, defaults to `profiles`
+* `--username`: defaults to `Administrator`
+* `--password`: defaults to `password`
+* `--tls-skip-verify`: used to skip TLS verification when contacting the cluster, defaults to `false`
+* `--cert`: the path to the cluster tls-certificate, defaults to `rootCA.crt`
+* `--num-items`: the number of documents to be loaded into the Cluster, defaults to `200000`
+* `--num-users`: the number of concurrent simulated Users (threads), defaults to `50000`
+* `--dapi-connstr`: the Data API connection string required when using a Data API workload and has no default value
+
+When running against Data API a normal connection string is still required, e.g: 
+
+```
+go run spectroperf.go --connstr <cluster-connection-string> --dapi-connstr <data-API-connection-string> --workload user-profile-dapi
+```
+
+This is because Data API will only be used for the running of the workload, while the `connstr` will be used to upload the documents initially.
+
 ## Contributing
 
 Pull requests are welcome and please file issues on Github.
