@@ -99,7 +99,7 @@ func Setup(w Workload, numItemsArg int, scp *gocb.Scope, coll *gocb.Collection) 
 	}
 }
 
-func Run(w Workload, numUsers int, runTime time.Duration) {
+func Run(w Workload, numUsers int, runTime time.Duration, rampTime time.Duration) {
 	sigCh := make(chan os.Signal, 10)
 	ctx, cancelFn := context.WithCancel(context.Background())
 
@@ -116,7 +116,7 @@ func Run(w Workload, numUsers int, runTime time.Duration) {
 
 	wg.Add(numUsers)
 	for i := 0; i < numUsers; i++ {
-		go runLoop(ctx, w.Probabilities(), w.Functions(), w.Operations(), runTime, i, &wg)
+		go runLoop(ctx, w.Probabilities(), w.Functions(), w.Operations(), runTime, rampTime, i, &wg)
 	}
 
 	wg.Wait()
@@ -128,6 +128,7 @@ func runLoop(
 	functions map[string]func(context.Context, Runctx) error,
 	operations []string,
 	runTime time.Duration,
+	rampTime time.Duration,
 	runnerId int,
 	wg *sync.WaitGroup) {
 
@@ -169,7 +170,7 @@ func runLoop(
 			t := r.Int31n(5000-400) + 400
 			time.Sleep(time.Duration(t) * time.Millisecond)
 
-			phase := MetricState(runStart, runEnd)
+			phase := MetricState(runStart, runEnd, rampTime)
 			attemptMetrics[nextFunction][phase].Inc()
 
 			start := time.Now()

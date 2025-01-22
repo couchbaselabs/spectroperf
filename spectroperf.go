@@ -48,6 +48,10 @@ func main() {
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 
+	if flags.rampTime > flags.runtTime/2 {
+		zap.L().Fatal("Ramp time cannot be greater than half of the total runtime")
+	}
+
 	// TODO: add a param to set this up if debugging gocb issues.  Probably with the system logger.
 	// gocb.SetLogger(gocb.VerboseStdioLogger())
 
@@ -100,7 +104,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, flags.numUsers, time.Duration(5)*time.Minute)
+	workload.Run(w, flags.numUsers, time.Duration(flags.runtTime)*time.Minute, time.Duration(flags.rampTime)*time.Minute)
 
 	wg.Wait()
 
@@ -119,6 +123,8 @@ type Flags struct {
 	tlsSkipVerify bool
 	workload      string
 	dapiConnstr   string
+	runtTime      int
+	rampTime      int
 }
 
 func parseFlags() Flags {
@@ -135,6 +141,8 @@ func parseFlags() Flags {
 	flag.BoolVar(&flags.tlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
 	flag.StringVar(&flags.workload, "workload", "", "workload name")
 	flag.StringVar(&flags.dapiConnstr, "dapi-connstr", "", "connection string for data api")
+	flag.IntVar(&flags.runtTime, "run-time", 5, "total time to run the workload in minutes")
+	flag.IntVar(&flags.rampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
 	flag.Parse()
 
 	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))

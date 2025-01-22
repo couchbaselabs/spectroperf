@@ -43,11 +43,10 @@ var (
 	failedMetrics   = map[string]map[OperationPhase]prometheus.Counter{}
 	durationMetrics = map[string]map[OperationPhase]prometheus.Observer{}
 
-	States   = []OperationPhase{RampUp, Steady, RampDown}
-	rampTime = time.Minute
+	States = []OperationPhase{RampUp, Steady, RampDown}
 )
 
-func MetricState(start time.Time, end time.Time) OperationPhase {
+func MetricState(start time.Time, end time.Time, rampTime time.Duration) OperationPhase {
 	phase := Steady
 	if time.Now().Sub(start) < rampTime {
 		phase = RampUp
