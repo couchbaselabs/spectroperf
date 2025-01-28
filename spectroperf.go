@@ -30,12 +30,20 @@ import (
 
 var wg sync.WaitGroup
 
-func init() {
-	zap.ReplaceGlobals(zap.Must(zap.NewProduction())) // TODO: replace this with a logger from CLI
+func initLogger(debug bool) {
+	if debug {
+		zap.ReplaceGlobals(zap.Must(zap.NewDevelopment()))
+	} else {
+		zap.ReplaceGlobals(zap.Must(zap.NewProduction())) // TODO: replace this with a logger from CLI
+	}
 }
 
 func main() {
 	flags := parseFlags()
+
+	initLogger(flags.debug)
+
+	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
 
 	if flags.connstr == "" {
 		zap.L().Fatal("No connection string provided")
@@ -125,6 +133,7 @@ type Flags struct {
 	dapiConnstr   string
 	runtTime      int
 	rampTime      int
+	debug         bool
 }
 
 func parseFlags() Flags {
@@ -143,9 +152,8 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.dapiConnstr, "dapi-connstr", "", "connection string for data api")
 	flag.IntVar(&flags.runtTime, "run-time", 5, "total time to run the workload in minutes")
 	flag.IntVar(&flags.rampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
+	flag.BoolVar(&flags.debug, "debug", false, "turn on debug level logging")
 	flag.Parse()
-
-	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
 
 	return flags
 }
