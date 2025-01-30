@@ -17,6 +17,7 @@ import (
 	"crypto/x509"
 	"flag"
 	"fmt"
+	"github.com/BurntSushi/toml"
 	"log"
 	"os"
 	"sync"
@@ -35,27 +36,36 @@ func init() {
 }
 
 func main() {
-	flags := parseFlags()
+	config := parseFlags()
 
-	if flags.connstr == "" {
+	if config.configFile != "" {
+		_, err := toml.DecodeFile(config.configFile, &config)
+		if err != nil {
+			zap.L().Fatal("Error decoding config file", zap.Error(err))
+		}
+	}
+
+	zap.L().Info("Successfully parsed config", zap.String("Config", fmt.Sprintf("%+v", config)))
+
+	if config.Connstr == "" {
 		zap.L().Fatal("No connection string provided")
 	}
 
-	caCert, err := os.ReadFile(flags.cert)
+	caCert, err := os.ReadFile(config.Cert)
 	if err != nil {
 		zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
 	}
 	caCertPool := x509.NewCertPool()
 	caCertPool.AppendCertsFromPEM(caCert)
 
-	if flags.rampTime > flags.runtTime/2 {
+	if config.RampTime > config.RunTime/2 {
 		zap.L().Fatal("Ramp time cannot be greater than half of the total runtime")
 	}
 
 	// TODO: add a param to set this up if debugging gocb issues.  Probably with the system logger.
 	// gocb.SetLogger(gocb.VerboseStdioLogger())
 
-	// TODO: sometimes you need a cert for couchbase2://, and then need to laod it and pass it as part of the security config
+	// TODO: sometimes you need a Cert for couchbase2://, and then need to laod it and pass it as part of the security config
 	// caCert, err := os.ReadFile("gateway-CA.crt")
 	// if err != nil {
 	// 	log.Fatal(err)
@@ -65,87 +75,87 @@ func main() {
 
 	opts := gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
-			Username: flags.username,
-			Password: flags.password,
+			Username: config.Username,
+			Password: config.Password,
 		},
-		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: flags.tlsSkipVerify},
+		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: config.TlsSkipVerify},
 	}
 
-	cluster, err := gocb.Connect(flags.connstr, opts)
+	cluster, err := gocb.Connect(config.Connstr, opts)
 	if err != nil {
 		log.Fatal(fmt.Sprintf("Failed to connect to cluster: %s", err))
 	}
 
-	bucket := cluster.Bucket(flags.bucket)
-	collection := bucket.Scope(flags.scope).Collection(flags.collection)
+	bucket := cluster.Bucket(config.Bucket)
+	collection := bucket.Scope(config.Scope).Collection(config.Collection)
 
 	err = bucket.WaitUntilReady(5*time.Second, nil)
 	if err != nil {
-		zap.L().Fatal("Failed to connect to bucket", zap.String("bucket", flags.bucket), zap.String("error", err.Error()))
+		zap.L().Fatal("Failed to connect to Bucket", zap.String("Bucket", config.Bucket), zap.String("error", err.Error()))
 	}
 
 	var w workload.Workload
-	switch flags.workload {
+	switch config.Workload {
 	case "user-profile":
-		w = workloads.NewUserProfile(flags.numItems, bucket.Scope(flags.scope), collection)
+		w = workloads.NewUserProfile(config.NumItems, bucket.Scope(config.Scope), collection)
 	case "user-profile-dapi":
-		w = workloads.NewUserProfileDapi(flags.dapiConnstr, flags.bucket, flags.scope, flags.collection, flags.numItems, flags.username, flags.password)
+		w = workloads.NewUserProfileDapi(config.DapiConnstr, config.Bucket, config.Scope, config.Collection, config.NumItems, config.Username, config.Password)
 	default:
-		zap.L().Fatal("Unknown workload type", zap.String("workload", flags.workload))
+		zap.L().Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}
 
 	workload.InitMetrics(w)
 
-	zap.L().Info("Setting up for workload", zap.String("workload", flags.workload))
+	zap.L().Info("Setting up for workload", zap.String("workload", config.Workload))
 
 	// call the setup function on the workload.
-	workload.Setup(w, flags.numItems, bucket.Scope(flags.scope), collection)
+	workload.Setup(w, config.NumItems, bucket.Scope(config.Scope), collection)
 
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, flags.numUsers, time.Duration(flags.runtTime)*time.Minute, time.Duration(flags.rampTime)*time.Minute)
+	workload.Run(w, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute)
 
 	wg.Wait()
 
 }
 
 type Flags struct {
-	connstr       string
-	cert          string
-	username      string
-	password      string
-	bucket        string
-	scope         string
-	collection    string
-	numItems      int
-	numUsers      int
-	tlsSkipVerify bool
-	workload      string
-	dapiConnstr   string
-	runtTime      int
-	rampTime      int
+	Connstr       string
+	Cert          string
+	Username      string
+	Password      string
+	Bucket        string
+	Scope         string
+	Collection    string
+	NumItems      int
+	NumUsers      int
+	TlsSkipVerify bool
+	Workload      string
+	DapiConnstr   string
+	RunTime       int
+	RampTime      int
+	configFile    string
 }
 
 func parseFlags() Flags {
 	flags := Flags{}
-	flag.StringVar(&flags.connstr, "connstr", "", "connection string of the cluster under test")
-	flag.StringVar(&flags.cert, "cert", "rootCA.crt", "path to certificate file")
-	flag.StringVar(&flags.username, "username", "Administrator", "username for cluster under test")
-	flag.StringVar(&flags.password, "password", "password", "password of the cluster under test")
-	flag.StringVar(&flags.bucket, "bucket", "data", "bucket name")
-	flag.StringVar(&flags.scope, "scope", "identity", "scope name")
-	flag.StringVar(&flags.collection, "collection", "profiles", "collection name")
-	flag.IntVar(&flags.numItems, "num-items", 200000, "number of docs to create")
-	flag.IntVar(&flags.numUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
-	flag.BoolVar(&flags.tlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
-	flag.StringVar(&flags.workload, "workload", "", "workload name")
-	flag.StringVar(&flags.dapiConnstr, "dapi-connstr", "", "connection string for data api")
-	flag.IntVar(&flags.runtTime, "run-time", 5, "total time to run the workload in minutes")
-	flag.IntVar(&flags.rampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
+	flag.StringVar(&flags.Connstr, "connstr", "", "connection string of the cluster under test")
+	flag.StringVar(&flags.Cert, "Cert", "rootCA.crt", "path to certificate file")
+	flag.StringVar(&flags.Username, "Username", "Administrator", "Username for cluster under test")
+	flag.StringVar(&flags.Password, "password", "password", "password of the cluster under test")
+	flag.StringVar(&flags.Bucket, "Bucket", "data", "Bucket name")
+	flag.StringVar(&flags.Scope, "Scope", "identity", "Scope name")
+	flag.StringVar(&flags.Collection, "Collection", "profiles", "Collection name")
+	flag.IntVar(&flags.NumItems, "num-items", 200000, "number of docs to create")
+	flag.IntVar(&flags.NumUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
+	flag.BoolVar(&flags.TlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
+	flag.StringVar(&flags.Workload, "workload", "", "workload name")
+	flag.StringVar(&flags.DapiConnstr, "dapi-connstr", "", "connection string for data api")
+	flag.IntVar(&flags.RunTime, "run-time", 5, "total time to run the workload in minutes")
+	flag.IntVar(&flags.RampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
+	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
 	flag.Parse()
-
-	zap.L().Info("Parsed flags", zap.String("flags", fmt.Sprintf("%+v", flags)))
 
 	return flags
 }
