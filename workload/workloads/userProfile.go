@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"github.com/brianvoe/gofakeit"
+	gotel "github.com/couchbase/gocb-opentelemetry"
 	"github.com/couchbase/gocb/v2"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/trace"
 	"math/rand"
 	"time"
 )
@@ -108,7 +110,8 @@ func (w userProfile) Functions() map[string]func(ctx context.Context, rctx workl
 // Fetch a random profile in the range of profiles
 func (w userProfile) fetchProfile(ctx context.Context, rctx workload.Runctx) error {
 	p := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	_, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx})
+	span := trace.SpanFromContext(ctx)
+	_, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("profile fetch failed: %s", err.Error())
 	}
@@ -119,7 +122,8 @@ func (w userProfile) fetchProfile(ctx context.Context, rctx workload.Runctx) err
 // Update the status of a random profile
 func (w userProfile) updateProfile(ctx context.Context, rctx workload.Runctx) error {
 	p := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems))) // Question to self, should I instead just grab this from context?  probably.
-	result, err := w.collection.Get(p, nil)
+	span := trace.SpanFromContext(ctx)
+	result, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("profile fetch during update failed: %s", err.Error())
 	}
@@ -132,7 +136,7 @@ func (w userProfile) updateProfile(ctx context.Context, rctx workload.Runctx) er
 
 	toUd.Status = gofakeit.Paragraph(1, rctx.Rand().Intn(8)+1, rctx.Rand().Intn(12)+1, "\n")
 
-	_, uerr := w.collection.Upsert(p, toUd, nil)
+	_, uerr := w.collection.Upsert(p, toUd, &gocb.UpsertOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if uerr != nil {
 		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
 	}
@@ -142,7 +146,8 @@ func (w userProfile) updateProfile(ctx context.Context, rctx workload.Runctx) er
 // Lock a random user profile by setting 'Enabled' to false
 func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) error {
 	p := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems))) // Question to self, should I instead just grab this from context?  probably.
-	result, err := w.collection.Get(p, nil)
+	span := trace.SpanFromContext(ctx)
+	result, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("profile fetch during lock failed: %s", err.Error())
 	}
@@ -152,7 +157,7 @@ func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) erro
 
 	toUd.Enabled = false
 
-	_, uerr := w.collection.Upsert(p, toUd, nil) // replace with replace or subdoc
+	_, uerr := w.collection.Upsert(p, toUd, &gocb.UpsertOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)}) // replace with replace or subdoc
 	if uerr != nil {
 		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
 	}
@@ -162,13 +167,14 @@ func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) erro
 // Find a profile using a n1ql query on the email field
 func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
+	span := trace.SpanFromContext(ctx)
 
 	query := "SELECT * FROM profiles WHERE Email LIKE $email LIMIT 1"
 	rctx.Logger().Sugar().Debugf("Querying with %s using param %s", query, toFind)
 	params := make(map[string]interface{}, 1)
 	params["email"] = toFind
 
-	rows, err := w.scope.Query(query, &gocb.QueryOptions{NamedParameters: params, Adhoc: true})
+	rows, err := w.scope.Query(query, &gocb.QueryOptions{NamedParameters: params, Adhoc: true, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("query failed: %s", err.Error())
 	}
