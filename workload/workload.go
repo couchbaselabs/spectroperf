@@ -3,10 +3,11 @@ package workload
 import (
 	"context"
 	"fmt"
+	gotel "github.com/couchbase/gocb-opentelemetry"
 	"github.com/couchbase/gocb/v2"
-	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 	"log"
 	"math/rand"
@@ -77,7 +78,7 @@ func Setup(w Workload, numItemsArg int, scp *gocb.Scope, coll *gocb.Collection) 
 				case doc := <-workChan:
 					_, err := coll.Upsert(doc.Name, doc.Data, nil)
 					if err != nil {
-						panic(errors.Wrap(err, "Data load upsert failed."))
+						panic(fmt.Errorf("data load upsert failed %w", err))
 					}
 				case <-shutdownChan:
 					wg.Done()
@@ -95,11 +96,11 @@ func Setup(w Workload, numItemsArg int, scp *gocb.Scope, coll *gocb.Collection) 
 	// Call the workload's own Setup function to perform any workload specific setup
 	err := w.Setup()
 	if err != nil {
-		panic(errors.Wrap(err, "failed to setup workload"))
+		panic(fmt.Errorf("failed to setup workload: %w", err))
 	}
 }
 
-func Run(w Workload, numUsers int, runTime time.Duration, rampTime time.Duration) {
+func Run(w Workload, numUsers int, runTime time.Duration, rampTime time.Duration, tracer *gotel.OpenTelemetryRequestTracer) {
 	sigCh := make(chan os.Signal, 10)
 	ctx, cancelFn := context.WithCancel(context.Background())
 
@@ -116,7 +117,7 @@ func Run(w Workload, numUsers int, runTime time.Duration, rampTime time.Duration
 
 	wg.Add(numUsers)
 	for i := 0; i < numUsers; i++ {
-		go runLoop(ctx, w.Probabilities(), w.Functions(), w.Operations(), runTime, rampTime, i, &wg)
+		go runLoop(ctx, w.Probabilities(), w.Functions(), w.Operations(), runTime, rampTime, i, &wg, tracer)
 	}
 
 	wg.Wait()
@@ -130,8 +131,9 @@ func runLoop(
 	runTime time.Duration,
 	rampTime time.Duration,
 	runnerId int,
-	wg *sync.WaitGroup) {
-
+	wg *sync.WaitGroup,
+	tracer *gotel.OpenTelemetryRequestTracer,
+) {
 	// Current operation index
 	currOpIndex := 0
 
@@ -173,8 +175,11 @@ func runLoop(
 			phase := MetricState(runStart, runEnd, rampTime)
 			attemptMetrics[nextFunction][phase].Inc()
 
+			ctx2, span := tracer.Wrapped().Start(ctx, nextFunction)
+			span.SetAttributes(attribute.Key("workload-phase").String(string(phase)))
+
 			start := time.Now()
-			err := functions[operations[nextOpIndex]](ctx, runCtx)
+			err := functions[operations[nextOpIndex]](ctx2, runCtx)
 			duration := time.Now().Sub(start)
 			durationMetrics[nextFunction][phase].Observe(float64(duration.Microseconds()) / 1000)
 
@@ -185,6 +190,7 @@ func runLoop(
 
 			// update for next time
 			currOpIndex = nextOpIndex
+			span.End()
 		}
 	}
 }

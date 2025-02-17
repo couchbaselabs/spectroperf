@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"github.com/brianvoe/gofakeit"
 	"github.com/couchbaselabs/spectroperf/workload"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"net/http"
+	"net/http/httptrace"
 	"time"
 )
 
@@ -27,10 +30,19 @@ type userProfileDapi struct {
 }
 
 func NewUserProfileDapi(connstr string, bucket string, scope string, collection string, numItems int, usr string, pwd string) userProfileDapi {
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		MaxConnsPerHost: 500,
-	}
+	tr := otelhttp.NewTransport(
+		&http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			MaxConnsPerHost: 500,
+		},
+		// By setting the otelhttptrace client in this transport, it can be
+		// injected into the context after the span is started, which makes the
+		// httptrace spans children of the transport one.
+		otelhttp.WithClientTrace(func(ctx context.Context) *httptrace.ClientTrace {
+			return otelhttptrace.NewClientTrace(ctx)
+		}),
+	)
+
 	return userProfileDapi{
 		connstr:    connstr,
 		username:   usr,
@@ -110,7 +122,7 @@ func (w userProfileDapi) executeRequest(req *http.Request) (*http.Response, erro
 func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
-	req, err := http.NewRequest("GET", requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
@@ -120,7 +132,7 @@ func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx)
 		return fmt.Errorf("could not fetch profile to update: %s", err.Error())
 	}
 
-	bodyText, err := ioutil.ReadAll(resp.Body)
+	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("could not read response body: %s", err.Error())
 	}
@@ -137,7 +149,7 @@ func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx)
 func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
-	req, err := http.NewRequest("GET", requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
@@ -165,15 +177,18 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 		return fmt.Errorf("could not marshal User to json: &s", err.Error())
 	}
 
-	req, err = http.NewRequest("PUT", requestURL, bytes.NewBuffer(jsonBytes))
+	req, err = http.NewRequestWithContext(ctx, "PUT", requestURL, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile update request: %s", err.Error()))
 	}
 
-	_, err = w.executeRequest(req)
+	resp, err = w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("error executing upsert request: %s", err.Error())
 	}
+
+	// Read response body so that http request span is correctly ended
+	_, _ = io.ReadAll(resp.Body)
 	return nil
 }
 
@@ -181,7 +196,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
-	req, err := http.NewRequest("GET", requestURL, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
@@ -209,15 +224,18 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 		return fmt.Errorf("could not marshal User to json: &s", err.Error())
 	}
 
-	req, err = http.NewRequest("PUT", requestURL, bytes.NewBuffer(jsonBytes))
+	req, err = http.NewRequestWithContext(ctx, "PUT", requestURL, bytes.NewBuffer(jsonBytes))
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile update request: %s", err.Error()))
 	}
 
-	_, err = w.executeRequest(req)
+	resp, err = w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("error executing upsert request: %s", err.Error())
 	}
+
+	// Read response body so that http request span is correctly ended
+	_, _ = io.ReadAll(resp.Body)
 	return nil
 }
 
@@ -238,7 +256,7 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 	requestURL := fmt.Sprintf("%s/_p/query/query/service", w.connstr)
 	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest("POST", requestURL, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(body))
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}

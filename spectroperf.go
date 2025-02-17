@@ -14,7 +14,9 @@
 package main
 
 import (
+	"context"
 	"crypto/x509"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/BurntSushi/toml"
@@ -73,12 +75,23 @@ func main() {
 	// caCertPool := x509.NewCertPool()
 	// caCertPool.AppendCertsFromPEM(caCert)
 
+	// Set up OpenTelemetry.
+	otelShutdown, tracer, err := workload.SetupOTelSDK(context.Background(), config.OtlpEndpoint, config.EnableTracing)
+	if err != nil {
+		return
+	}
+	// Handle shutdown properly so nothing leaks.
+	defer func() {
+		err = errors.Join(err, otelShutdown(context.Background()))
+	}()
+
 	opts := gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: config.Username,
 			Password: config.Password,
 		},
 		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: config.TlsSkipVerify},
+		Tracer:         tracer,
 	}
 
 	cluster, err := gocb.Connect(config.Connstr, opts)
@@ -114,7 +127,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute)
+	workload.Run(w, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
 
 	wg.Wait()
 
@@ -136,6 +149,8 @@ type Flags struct {
 	RunTime       int
 	RampTime      int
 	configFile    string
+	OtlpEndpoint  string
+	EnableTracing bool
 }
 
 func parseFlags() Flags {
@@ -155,6 +170,8 @@ func parseFlags() Flags {
 	flag.IntVar(&flags.RunTime, "run-time", 5, "total time to run the workload in minutes")
 	flag.IntVar(&flags.RampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
 	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
+	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", "localhost:4318", "endpoint OTEL traces will be exported to")
+	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
 	flag.Parse()
 
 	return flags
