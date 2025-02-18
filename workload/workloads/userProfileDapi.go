@@ -11,7 +11,6 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"io"
-	"io/ioutil"
 	"math/rand"
 	"net/http"
 	"net/http/httptrace"
@@ -32,8 +31,9 @@ type userProfileDapi struct {
 func NewUserProfileDapi(connstr string, bucket string, scope string, collection string, numItems int, usr string, pwd string) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-			MaxConnsPerHost: 500,
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+			MaxConnsPerHost:     500,
+			MaxIdleConnsPerHost: 100,
 		},
 		// By setting the otelhttptrace client in this transport, it can be
 		// injected into the context after the span is started, which makes the
@@ -137,6 +137,11 @@ func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx)
 		return fmt.Errorf("could not read response body: %s", err.Error())
 	}
 
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
+	}
+
 	var toUd User
 	err = json.Unmarshal(bodyText, &toUd)
 	if err != nil {
@@ -159,9 +164,14 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 		return fmt.Errorf("could not fetch profile to update: %s", err.Error())
 	}
 
-	bodyText, err := ioutil.ReadAll(resp.Body)
+	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("could not read response body: %s", err.Error())
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
 	}
 
 	var toUd User
@@ -189,6 +199,11 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 
 	// Read response body so that http request span is correctly ended
 	_, _ = io.ReadAll(resp.Body)
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
+	}
+
 	return nil
 }
 
@@ -206,9 +221,14 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 		return fmt.Errorf("could not fetch profile to update: %s", err.Error())
 	}
 
-	bodyText, err := ioutil.ReadAll(resp.Body)
+	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("could not read response body: %s", err.Error())
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
 	}
 
 	var toUd User
@@ -236,6 +256,11 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 
 	// Read response body so that http request span is correctly ended
 	_, _ = io.ReadAll(resp.Body)
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
+	}
+
 	return nil
 }
 
@@ -270,6 +295,11 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return fmt.Errorf("could not read response body: %s", err.Error())
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
 	}
 
 	var results DapiUserQueryResponse
