@@ -53,6 +53,16 @@ func main() {
 		zap.L().Fatal("No connection string provided")
 	}
 
+	if !config.EnableTracing {
+		if config.OtlpEndpoint != "" {
+			zap.L().Fatal("Set enable-tracing to true to send traces to the desired endpoint")
+		}
+
+		if config.HoneycombKey != "" {
+			zap.L().Fatal("Set enable-tracing to true to send traces to Honeycomb")
+		}
+	}
+
 	caCert, err := os.ReadFile(config.Cert)
 	if err != nil {
 		zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
@@ -76,7 +86,7 @@ func main() {
 	// caCertPool.AppendCertsFromPEM(caCert)
 
 	// Set up OpenTelemetry.
-	otelShutdown, tracer, err := workload.SetupOTelSDK(context.Background(), config.OtlpEndpoint, config.EnableTracing)
+	otelShutdown, tracer, err := workload.SetupOTelSDK(context.Background(), config.OtlpEndpoint, config.EnableTracing, config.HoneycombKey)
 	if err != nil {
 		return
 	}
@@ -151,6 +161,7 @@ type Flags struct {
 	configFile    string
 	OtlpEndpoint  string
 	EnableTracing bool
+	HoneycombKey  string
 }
 
 func parseFlags() Flags {
@@ -172,6 +183,7 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
 	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", "localhost:4318", "endpoint OTEL traces will be exported to")
 	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
+	flag.StringVar(&flags.HoneycombKey, "honeycomb-key", "", "API key used when sending traces to Honeycomb.io")
 	flag.Parse()
 
 	return flags

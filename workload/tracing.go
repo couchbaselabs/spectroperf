@@ -5,6 +5,7 @@ import (
 	"errors"
 	gotel "github.com/couchbase/gocb-opentelemetry"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -20,7 +21,7 @@ var (
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool) (shutdown func(context.Context) error, tracer *gotel.OpenTelemetryRequestTracer, err error) {
+func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, honeycombKey string) (shutdown func(context.Context) error, tracer *gotel.OpenTelemetryRequestTracer, err error) {
 	var shutdownFuncs []func(context.Context) error
 
 	// shutdown calls cleanup functions registered via shutdownFuncs.
@@ -42,7 +43,16 @@ func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool) (shu
 
 	var tp trace.TracerProvider
 	if enableTracing {
-		traceExporter, err := otlptracehttp.New(context.Background(), otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(endpoint))
+		var te *otlptrace.Exporter
+
+		if honeycombKey != "" {
+			headers := map[string]string{}
+			headers["x-honeycomb-team"] = honeycombKey
+			te, err = otlptracehttp.New(context.Background(), otlptracehttp.WithEndpoint(endpoint), otlptracehttp.WithHeaders(headers))
+		} else {
+			te, err = otlptracehttp.New(context.Background(), otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(endpoint))
+		}
+
 		if err != nil {
 			return nil, nil, handleErr(err)
 		}
@@ -64,7 +74,7 @@ func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool) (shu
 		}
 
 		sdkTp := sdktrace.NewTracerProvider(
-			sdktrace.WithBatcher(traceExporter),
+			sdktrace.WithBatcher(te),
 			sdktrace.WithResource(res),
 		)
 
