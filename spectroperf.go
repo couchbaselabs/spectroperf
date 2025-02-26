@@ -58,8 +58,8 @@ func main() {
 			zap.L().Fatal("Otlp endpoint provided but tracing disabled")
 		}
 
-		if config.HoneycombKey != "" {
-			zap.L().Fatal("Honeycomb key provided but tracing disabled")
+		if config.OtelExporterHeaders != "" {
+			zap.L().Fatal("OtelExporterHeaders provided but tracing disabled")
 		}
 	}
 
@@ -86,7 +86,7 @@ func main() {
 	// caCertPool.AppendCertsFromPEM(caCert)
 
 	// Set up OpenTelemetry.
-	otelShutdown, tracer, err := workload.SetupOTelSDK(context.Background(), config.OtlpEndpoint, config.EnableTracing, config.HoneycombKey)
+	otelShutdown, tracer, err := workload.SetupOTelSDK(context.Background(), config.OtlpEndpoint, config.EnableTracing, config.OtelExporterHeaders)
 	if err != nil {
 		return
 	}
@@ -144,24 +144,24 @@ func main() {
 }
 
 type Flags struct {
-	Connstr       string
-	Cert          string
-	Username      string
-	Password      string
-	Bucket        string
-	Scope         string
-	Collection    string
-	NumItems      int
-	NumUsers      int
-	TlsSkipVerify bool
-	Workload      string
-	DapiConnstr   string
-	RunTime       int
-	RampTime      int
-	configFile    string
-	OtlpEndpoint  string
-	EnableTracing bool
-	HoneycombKey  string
+	Connstr             string
+	Cert                string
+	Username            string
+	Password            string
+	Bucket              string
+	Scope               string
+	Collection          string
+	NumItems            int
+	NumUsers            int
+	TlsSkipVerify       bool
+	Workload            string
+	DapiConnstr         string
+	RunTime             int
+	RampTime            int
+	configFile          string
+	OtlpEndpoint        string
+	EnableTracing       bool
+	OtelExporterHeaders string
 }
 
 func parseFlags() Flags {
@@ -183,7 +183,7 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
 	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", workload.DefaultOtlpEndpoint, "endpoint OTEL traces will be exported to")
 	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
-	flag.StringVar(&flags.HoneycombKey, "honeycomb-key", "", "API key used when sending traces to Honeycomb.io")
+	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
 	flag.Parse()
 
 	return flags
