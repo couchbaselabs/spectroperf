@@ -3,6 +3,7 @@ package workload
 import (
 	"context"
 	"errors"
+	"fmt"
 	gotel "github.com/couchbase/gocb-opentelemetry"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -13,13 +14,14 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
+	"strings"
 )
 
 const DefaultOtlpEndpoint = "localhost:4318"
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, honeycombKey string) (shutdown func(context.Context) error, tracer *gotel.OpenTelemetryRequestTracer, err error) {
+func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, otelExporterHeaders string) (shutdown func(context.Context) error, tracer *gotel.OpenTelemetryRequestTracer, err error) {
 	var shutdownFuncs []func(context.Context) error
 
 	// shutdown calls cleanup functions registered via shutdownFuncs.
@@ -43,9 +45,17 @@ func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, hone
 	if enableTracing {
 		var te *otlptrace.Exporter
 
-		if honeycombKey != "" {
+		if otelExporterHeaders != "" {
 			headers := map[string]string{}
-			headers["x-honeycomb-team"] = honeycombKey
+			for _, h := range strings.Split(otelExporterHeaders, ",") {
+				splitHeader := strings.Split(h, "=")
+				if len(splitHeader) != 2 {
+					return nil, nil, fmt.Errorf("invalid otel-exporter-headers format: %s", h)
+				}
+
+				headers[splitHeader[0]] = splitHeader[1]
+			}
+
 			te, err = otlptracehttp.New(context.Background(), otlptracehttp.WithEndpoint(endpoint), otlptracehttp.WithHeaders(headers))
 		} else {
 			te, err = otlptracehttp.New(context.Background(), otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(endpoint))
