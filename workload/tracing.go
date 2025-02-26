@@ -15,9 +15,7 @@ import (
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
 )
 
-var (
-	Tracer = otel.Tracer("spectroperf")
-)
+const DefaultOtlpEndpoint = "localhost:4318"
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.

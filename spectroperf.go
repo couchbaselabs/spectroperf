@@ -54,12 +54,12 @@ func main() {
 	}
 
 	if !config.EnableTracing {
-		if config.OtlpEndpoint != "" {
-			zap.L().Fatal("Set enable-tracing to true to send traces to the desired endpoint")
+		if config.OtlpEndpoint != workload.DefaultOtlpEndpoint {
+			zap.L().Fatal("Otlp endpoint provided but tracing disabled")
 		}
 
 		if config.HoneycombKey != "" {
-			zap.L().Fatal("Set enable-tracing to true to send traces to Honeycomb")
+			zap.L().Fatal("Honeycomb key provided but tracing disabled")
 		}
 	}
 
@@ -181,7 +181,7 @@ func parseFlags() Flags {
 	flag.IntVar(&flags.RunTime, "run-time", 5, "total time to run the workload in minutes")
 	flag.IntVar(&flags.RampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
 	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
-	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", "localhost:4318", "endpoint OTEL traces will be exported to")
+	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", workload.DefaultOtlpEndpoint, "endpoint OTEL traces will be exported to")
 	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
 	flag.StringVar(&flags.HoneycombKey, "honeycomb-key", "", "API key used when sending traces to Honeycomb.io")
 	flag.Parse()
