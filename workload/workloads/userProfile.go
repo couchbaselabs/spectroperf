@@ -306,11 +306,13 @@ func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runc
 		return fmt.Errorf("fts query failed: %s", err.Error())
 	}
 
+	var matchingUsers []string
 	for matchResult.Next() {
 		row := matchResult.Row()
-		docID := row.ID
-		rctx.Logger().Sugar().Debugf("Found user %s with matching interests", docID)
+		matchingUsers = append(matchingUsers, row.ID)
 	}
+
+	rctx.Logger().Sugar().Debugf("Found users interested in %s: %v\n", interestToFind, matchingUsers)
 
 	err = matchResult.Err()
 	if err != nil {

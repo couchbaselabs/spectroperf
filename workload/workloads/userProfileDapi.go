@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptrace"
+	"strings"
 	"time"
 )
 
@@ -59,12 +60,27 @@ func (w userProfileDapi) GenerateDocument(id string) workload.DocType {
 	rng := rand.NewSource(int64(workload.RandSeed))
 	r := rand.New(rng)
 
+	var interests string
+	numberOfInterests := rand.Intn(10)
+	for i := 0; i < numberOfInterests; i++ {
+		interest := Interests[rand.Intn(len(Interests))]
+
+		if i == 0 {
+			interests = interest
+		} else {
+			if !strings.Contains(interests, interest) {
+				interests = interests + ", " + interest
+			}
+		}
+	}
+
 	iu := User{
-		Name:    gofakeit.Name(),
-		Email:   gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
-		Created: gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
-		Status:  gofakeit.Paragraph(1, r.Intn(8)+1, r.Intn(12)+1, "\n"),
-		Enabled: true,
+		Name:      gofakeit.Name(),
+		Email:     gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
+		Created:   gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
+		Status:    gofakeit.Paragraph(1, r.Intn(8)+1, r.Intn(12)+1, "\n"),
+		Interests: interests,
+		Enabled:   true,
 	}
 
 	return workload.DocType{
@@ -308,6 +324,69 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 	return nil
 }
 
+type DapiSearchQueryPayload struct {
+	Query SearchQuery `json:"query"`
+}
+
+type SearchQuery struct {
+	Query string `json:"query"`
+}
+
+type DapiUserSearchQueryResponse struct {
+	Results []SearchQueryResult `json:"hits"`
+}
+
+type SearchQueryResult struct {
+	Id string `json:"id"`
+}
+
 func (w userProfileDapi) findRelatedProfiles(ctx context.Context, rctx workload.Runctx) error {
+	interestToFind := Interests[rand.Intn(len(Interests))]
+
+	rctx.Logger().Sugar().Debugf("Finding profiles that contain the interest %s", interestToFind)
+
+	requestURL := fmt.Sprintf("%s/_p/fts/api/index/interest-index/query", w.connstr)
+	payload := DapiSearchQueryPayload{
+		Query: SearchQuery{
+			Query: interestToFind,
+		},
+	}
+
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(body))
+	if err != nil {
+		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := w.executeRequest(req)
+	if err != nil {
+		return fmt.Errorf("could not execute search query request: %s", err.Error())
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("could not read response body: %s", err.Error())
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
+	}
+
+	var results DapiUserSearchQueryResponse
+	err = json.Unmarshal(bodyBytes, &results)
+	if err != nil {
+		return fmt.Errorf("could not unmarshal response body - %s : %s", string(bodyBytes), err.Error())
+	}
+
+	var matchingUsers []string
+	for _, result := range results.Results {
+		matchingUsers = append(matchingUsers, result.Id)
+	}
+
+	rctx.Logger().Sugar().Debugf("Found users interested in %s: %v\n", interestToFind, matchingUsers)
+
 	return nil
 }
