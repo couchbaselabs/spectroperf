@@ -19,10 +19,10 @@ type userProfile struct {
 	numItems   int
 	scope      *gocb.Scope
 	collection *gocb.Collection
-	cluster    gocb.Cluster
+	cluster    *gocb.Cluster
 }
 
-func NewUserProfile(numItems int, scope *gocb.Scope, collection *gocb.Collection, cluster gocb.Cluster) userProfile {
+func NewUserProfile(numItems int, scope *gocb.Scope, collection *gocb.Collection, cluster *gocb.Cluster) userProfile {
 	return userProfile{
 		numItems:   numItems,
 		scope:      scope,
@@ -117,12 +117,12 @@ func (w userProfile) Probabilities() [][]float64 {
 func (w userProfile) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	err := createQueryIndex(w.collection)
+	err := CreateQueryIndex(w.collection)
 	if err != nil {
 		return err
 	}
 
-	err = createFtsIndexes(w.cluster)
+	err = CreateFtsIndexes(w.cluster)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (w userProfile) Setup() error {
 	return nil
 }
 
-func createQueryIndex(collection *gocb.Collection) error {
+func CreateQueryIndex(collection *gocb.Collection) error {
 	mgr := collection.QueryIndexes()
 	err := mgr.CreateIndex("eMailIndex", []string{"Email"}, &gocb.CreateQueryIndexOptions{
 		IgnoreIfExists: true,
@@ -143,7 +143,7 @@ func createQueryIndex(collection *gocb.Collection) error {
 	return nil
 }
 
-func createFtsIndexes(cluster gocb.Cluster) error {
+func CreateFtsIndexes(cluster *gocb.Cluster) error {
 	indexName := "interest-index"
 	mgr := cluster.SearchIndexes()
 

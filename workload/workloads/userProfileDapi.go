@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/brianvoe/gofakeit"
+	"github.com/couchbase/gocb/v2"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -25,10 +26,11 @@ type userProfileDapi struct {
 	numItems   int
 	bucket     string
 	scope      string
-	collection string
+	collection *gocb.Collection
+	cluster    *gocb.Cluster
 }
 
-func NewUserProfileDapi(connstr string, bucket string, scope string, collection string, numItems int, usr string, pwd string) userProfileDapi {
+func NewUserProfileDapi(connstr string, bucket string, scope string, collection *gocb.Collection, numItems int, usr string, pwd string, cluster *gocb.Cluster) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
 			MaxConnsPerHost:     500,
@@ -51,6 +53,7 @@ func NewUserProfileDapi(connstr string, bucket string, scope string, collection 
 		bucket:     bucket,
 		scope:      scope,
 		collection: collection,
+		cluster:    cluster,
 	}
 }
 
@@ -104,8 +107,18 @@ func (w userProfileDapi) Probabilities() [][]float64 {
 }
 
 func (w userProfileDapi) Setup() error {
-	// TODO setup FTS index here for findRelatedProfile
 	gofakeit.Seed(int64(workload.RandSeed))
+
+	err := CreateQueryIndex(w.collection)
+	if err != nil {
+		return err
+	}
+
+	err = CreateFtsIndexes(w.cluster)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -135,7 +148,7 @@ func (w userProfileDapi) executeRequest(req *http.Request) (*http.Response, erro
 // Fetch a random profile in the range of profiles
 func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
+	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
@@ -167,7 +180,7 @@ func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx)
 // Update the status of a random profile
 func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
+	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
@@ -224,7 +237,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 // Lock a random user profile by setting 'Enabled' to false
 func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
+	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
@@ -288,7 +301,7 @@ type DapiUserQueryResponse struct {
 
 func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
-	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE Email LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection, toFind)
+	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE Email LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection.Name(), toFind)
 	payload := DapiQueryPayload{
 		Statement: query,
 	}
