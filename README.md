@@ -89,6 +89,30 @@ go run spectroperf.go --connstr <cluster-connection-string> --dapi-connstr <data
 
 This is because Data API will only be used for the running of the workload, while the `connstr` will be used to upload the documents initially.
 
+## Metrics
+
+Spectroperf produces Prometheus metrics on:
+
+1. Number of successful operations by type
+2. Number of failed operations by type
+3. Operation duration as a histogram by type
+
+These are exposed on port `2112` and can be scraped by using by running Prometheus with the config file in this repo: 
+
+```
+prometheus --config.file=prometheus.yml
+```
+
+This will scrape the metrics from Spectroperf at `localhost:2112` and export them on `localhost:9090`. 
+Once Prometheus is exporting the metrics they can be viewed in Grafana, to do this: 
+
+1. Run Grafana locally and add a new DataSource with the `Prometheus Server Url = http://localhost:9090` (obviusly this will be different if you edit the Prometheus config file)
+2. Import the Grafana dashboard from the Json definition in: `Grafana_dashboard.json`
+
+The dashboard is split into three sections `ramp-up`, `steady` and `ramp-down`.
+The `ramp-up` phase is the first minute of the workload, and the `ramp-down` is the last minute while `steady` is the time in the middle. 
+Feel free to edit the dashboard to perform the analysis required, this definition was just given as a starting point. 
+
 ## Contributing
 
 Pull requests are welcome and please file issues on Github.
