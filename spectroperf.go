@@ -63,13 +63,6 @@ func main() {
 		}
 	}
 
-	caCert, err := os.ReadFile(config.Cert)
-	if err != nil {
-		zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
-	}
-	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
-
 	if config.RampTime > config.RunTime/2 {
 		zap.L().Fatal("Ramp time cannot be greater than half of the total runtime")
 	}
@@ -95,12 +88,27 @@ func main() {
 		err = errors.Join(err, otelShutdown(context.Background()))
 	}()
 
+	var security_config gocb.SecurityConfig
+	if config.TlsSkipVerify {
+		security_config = gocb.SecurityConfig{TLSSkipVerify: config.TlsSkipVerify}
+	} else {
+		caCert, err := os.ReadFile(config.Cert)
+		if err != nil {
+			zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
+		}
+		caCertPool := x509.NewCertPool()
+
+		caCertPool.AppendCertsFromPEM(caCert)
+
+		security_config = gocb.SecurityConfig{TLSRootCAs: caCertPool}
+	}
+
 	opts := gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
 			Username: config.Username,
 			Password: config.Password,
 		},
-		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: config.TlsSkipVerify},
+		SecurityConfig: security_config,
 		Tracer:         tracer,
 	}
 
