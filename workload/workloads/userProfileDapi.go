@@ -3,7 +3,6 @@ package workloads
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"github.com/brianvoe/gofakeit"
@@ -31,7 +30,6 @@ type userProfileDapi struct {
 func NewUserProfileDapi(connstr string, bucket string, scope string, collection string, numItems int, usr string, pwd string) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 			MaxConnsPerHost:     500,
 			MaxIdleConnsPerHost: 100,
 		},
