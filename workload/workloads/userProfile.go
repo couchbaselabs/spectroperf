@@ -6,10 +6,13 @@ import (
 	"github.com/brianvoe/gofakeit"
 	gotel "github.com/couchbase/gocb-opentelemetry"
 	"github.com/couchbase/gocb/v2"
+	"github.com/couchbase/gocb/v2/search"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
 	"math/rand"
+	"strings"
 	"time"
 )
 
@@ -17,27 +20,51 @@ type userProfile struct {
 	numItems   int
 	scope      *gocb.Scope
 	collection *gocb.Collection
+	cluster    *gocb.Cluster
 }
 
-func NewUserProfile(numItems int, scope *gocb.Scope, collection *gocb.Collection) userProfile {
+func NewUserProfile(numItems int, scope *gocb.Scope, collection *gocb.Collection, cluster *gocb.Cluster) userProfile {
 	return userProfile{
 		numItems:   numItems,
 		scope:      scope,
 		collection: collection,
+		cluster:    cluster,
 	}
 }
 
 type User struct {
-	Name    string
-	Email   string
-	Created time.Time
-	Status  string
-	Enabled bool
+	Name      string
+	Email     string
+	Created   time.Time
+	Status    string
+	Interests string
+	Enabled   bool
 }
 
 type UserQueryResponse struct {
 	Profiles User
 }
+
+var Interests = []string{"Painting", "Drawing", "Sculpting", "Photography", "Writing", "Poetry", "Journaling", "Reading",
+	"Gardening", "Hiking", "Cycling", "Running", "Swimming", "Yoga", "Pilates", "Meditation", "Knitting", "Crocheting",
+	"Sewing", "Quilting", "Embroidery", "Pottery", "Woodworking", "Baking", "Cooking", "Brewing", "Cake Decorating",
+	"DIY Projects", "Calligraphy", "Scrapbooking", "Bird Watching", "Stargazing", "Astronomy", "Fishing", "Hunting",
+	"Archery", "Gardening", "Indoor Plants", "Beekeeping", "Bonsai", "Origami", "Magic Tricks", "Playing Guitar",
+	"Playing Piano", "Playing Violin", "Playing Drums", "Playing Saxophone", "Singing", "Dancing", "Ballet",
+	"Salsa Dancing", "Ballroom Dancing", "Tap Dancing", "Hip-Hop Dance", "Skateboarding", "Snowboarding", "Skiing",
+	"Ice Skating", "Rollerblading", "Surfing", "Scuba Diving", "Skydiving", "Rock Climbing", "Bouldering", "Paragliding",
+	"Yoga", "Martial Arts", "Kickboxing", "Boxing", "Judo", "Taekwondo", "Karate", "Brazilian Jiu-Jitsu", "Krav Maga",
+	"Weightlifting", "Crossfit", "Running Marathons", "Triathlons", "Geocaching", "Volunteering", "Traveling", "Camping",
+	"RVing", "Sailing", "Boat Building", "Car Restoration", "Metalworking", "Leatherworking", "Model Building",
+	"Lego Building", "Collecting Antiques", "Collecting Stamps", "Collecting Coins", "Collecting Action Figures",
+	"Collecting Comics", "Playing Board Games", "Playing Card Games", "Puzzle Solving", "Video Gaming", "VR Gaming",
+	"Computer Programming", "Web Design", "Graphic Design", "Animation", "3D Modeling", "Playing Chess", "Playing Mahjong",
+	"Playing Poker", "Learning New Languages", "Blogging", "Vlogging", "Podcasting", "Public Speaking", "Debate", "Acting",
+	"Film Making", "Voice Acting", "Writing Fiction", "Writing Non-Fiction", "Storytelling", "Community Service",
+	"Mentoring", "Networking", "Giving Presentations", "Singing in a Choir", "Playing in a Band", "Circus Arts",
+	"Fire Breathing", "Aerial Arts", "Trampoline", "Roller Derby", "Fencing", "Swimming", "Croquet", "Archery", "Curling",
+	"Bowling", "Ping Pong", "Tennis", "Badminton", "Golf", "Lawn Darts", "Basketball", "Football", "Baseball", "Soccer",
+	"Rugby", "Lacrosse", "Cricket", "Handball"}
 
 // Create a random document with a realistic size from name, email, status text and whether
 // or not the account is enabled.
@@ -45,12 +72,27 @@ func (w userProfile) GenerateDocument(id string) workload.DocType {
 	rng := rand.NewSource(int64(workload.RandSeed))
 	r := rand.New(rng)
 
+	var interests string
+	numberOfInterests := rand.Intn(10)
+	for i := 0; i < numberOfInterests; i++ {
+		interest := Interests[rand.Intn(len(Interests))]
+
+		if i == 0 {
+			interests = interest
+		} else {
+			if !strings.Contains(interests, interest) {
+				interests = interests + ", " + interest
+			}
+		}
+	}
+
 	iu := User{
-		Name:    gofakeit.Name(),
-		Email:   gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
-		Created: gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
-		Status:  gofakeit.Paragraph(1, r.Intn(8)+1, r.Intn(12)+1, "\n"),
-		Enabled: true,
+		Name:      gofakeit.Name(),
+		Email:     gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
+		Created:   gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
+		Status:    gofakeit.Paragraph(1, r.Intn(8)+1, r.Intn(12)+1, "\n"),
+		Interests: interests,
+		Enabled:   true,
 	}
 
 	return workload.DocType{
@@ -76,7 +118,12 @@ func (w userProfile) Probabilities() [][]float64 {
 func (w userProfile) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	err := createQueryIndex(w.collection)
+	err := CreateQueryIndex(w.collection)
+	if err != nil {
+		return err
+	}
+
+	err = EnsureFtsIndex(w.cluster)
 	if err != nil {
 		return err
 	}
@@ -84,9 +131,12 @@ func (w userProfile) Setup() error {
 	return nil
 }
 
-func createQueryIndex(collection *gocb.Collection) error {
+func CreateQueryIndex(collection *gocb.Collection) error {
+	indexName := "eMailIndex"
+	zap.L().Info("Creating query index", zap.String("name", indexName))
+
 	mgr := collection.QueryIndexes()
-	err := mgr.CreateIndex("eMailIndex", []string{"Email"}, &gocb.CreateQueryIndexOptions{
+	err := mgr.CreateIndex(indexName, []string{"Email"}, &gocb.CreateQueryIndexOptions{
 		IgnoreIfExists: true,
 	})
 
@@ -95,6 +145,74 @@ func createQueryIndex(collection *gocb.Collection) error {
 	}
 
 	return nil
+}
+
+func EnsureFtsIndex(cluster *gocb.Cluster) error {
+	indexName := "interest-index"
+	mgr := cluster.SearchIndexes()
+
+	_, err := mgr.GetIndex(indexName, nil)
+	if err == nil {
+		zap.L().Info("Skipping fts index creation as already present", zap.String("name", indexName))
+		return nil
+	}
+
+	if !strings.Contains(err.Error(), "index not found") {
+		return err
+	}
+
+	zap.L().Info("Creating fts index", zap.String("name", indexName))
+	params := map[string]interface{}{
+		"doc_config": map[string]interface{}{
+			"mode":       "scope.collection.type_field",
+			"type_field": "interests",
+		},
+		"mapping": map[string]interface{}{
+			"default_mapping": map[string]interface{}{
+				"dynamic": true,
+				"enabled": false,
+			},
+			"types": map[string]interface{}{
+				"identity.profiles": map[string]interface{}{
+					"dynamic": true,
+					"enabled": true,
+				},
+			},
+		},
+	}
+
+	err = mgr.UpsertIndex(gocb.SearchIndex{
+		UUID:         "",
+		Name:         indexName,
+		SourceName:   "data",
+		Type:         "fulltext-index",
+		Params:       params,
+		SourceUUID:   "",
+		SourceParams: nil,
+		SourceType:   "gocbcore",
+		PlanParams:   nil,
+	}, nil)
+	if err != nil {
+		return nil
+	}
+
+	zap.L().Info("Checking fts index is ready to use", zap.String("name", indexName))
+
+	end := time.Now().Add(time.Minute)
+	for time.Now().Before(end) {
+		_, err = cluster.SearchQuery(
+			"interest-index",
+			search.NewMatchQuery("Painting"),
+			nil,
+		)
+		if err != nil {
+			time.Sleep(time.Second * 10)
+		} else {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("timed out waiting for fts index to be ready: %s", err.Error())
 }
 
 func (w userProfile) Functions() map[string]func(ctx context.Context, rctx workload.Runctx) error {
@@ -196,43 +314,35 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 }
 
 func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runctx) error {
+	interestToFind := Interests[rand.Intn(len(Interests))]
+	span := trace.SpanFromContext(ctx)
+
+	rctx.Logger().Sugar().Debugf("Finding profiles that contain the interest %s", interestToFind)
+
+	matchResult, err := w.cluster.SearchQuery(
+		"interest-index",
+		search.NewMatchQuery(interestToFind),
+		&gocb.SearchOptions{
+			ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span),
+		},
+	)
+
+	if err != nil {
+		return fmt.Errorf("fts query failed: %s", err.Error())
+	}
+
+	var matchingUsers []string
+	for matchResult.Next() {
+		row := matchResult.Row()
+		matchingUsers = append(matchingUsers, row.ID)
+	}
+
+	rctx.Logger().Sugar().Debugf("Found users interested in %s: %v\n", interestToFind, matchingUsers)
+
+	err = matchResult.Err()
+	if err != nil {
+		return fmt.Errorf("error iterating the rows: %s", err.Error())
+	}
+
 	return nil
-
-	// toFind := gofakeit.Paragraph(1, 1, ctx.r.Intn(12)+1, "\n") // one sentence to search
-
-	// ctx.l.Sugar().Debugf("Searching for related profiles with string %s", toFind)
-	// params := make(map[string]interface{}, 1)
-	// params["email"] = toFind
-
-	// matchResult, err := scope.Search(
-	// 	"profile-statuses",
-	// 	search.NewMatchQuery(tofind),
-	// 	&gocb.SearchOptions{
-	// 		Limit:  10,
-	// 		Fields: []string{"description"},
-	// 	},
-	// )
-	// if err != nil {
-	// 	panic(err)
-	// }
-
-	// for matchResult.Next() {
-	// 	row := matchResult.Row()
-	// 	docID := row.ID
-	// 	score := row.Score
-
-	// 	var fields interface{}
-	// 	err := row.Fields(&fields)
-	// 	if err != nil {
-	// 		panic(err)
-	// 	}
-
-	// 	fmt.Printf("Document ID: %s, search score: %f, fields included in result: %v\n", docID, score, fields)
-	// }
-
-	// // always check for errors after iterating
-	// err = matchResult.Err()
-	// if err != nil {
-	// 	panic(err)
-	// }
 }
