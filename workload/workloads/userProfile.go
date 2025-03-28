@@ -10,6 +10,7 @@ import (
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
+	"go.uber.org/zap"
 	"math/rand"
 	"strings"
 	"time"
@@ -122,7 +123,7 @@ func (w userProfile) Setup() error {
 		return err
 	}
 
-	err = CreateFtsIndexes(w.cluster)
+	err = EnsureFtsIndex(w.cluster)
 	if err != nil {
 		return err
 	}
@@ -131,8 +132,11 @@ func (w userProfile) Setup() error {
 }
 
 func CreateQueryIndex(collection *gocb.Collection) error {
+	indexName := "eMailIndex"
+	zap.L().Info("Creating query index", zap.String("name", indexName))
+
 	mgr := collection.QueryIndexes()
-	err := mgr.CreateIndex("eMailIndex", []string{"Email"}, &gocb.CreateQueryIndexOptions{
+	err := mgr.CreateIndex(indexName, []string{"Email"}, &gocb.CreateQueryIndexOptions{
 		IgnoreIfExists: true,
 	})
 
@@ -143,12 +147,13 @@ func CreateQueryIndex(collection *gocb.Collection) error {
 	return nil
 }
 
-func CreateFtsIndexes(cluster *gocb.Cluster) error {
+func EnsureFtsIndex(cluster *gocb.Cluster) error {
 	indexName := "interest-index"
 	mgr := cluster.SearchIndexes()
 
 	_, err := mgr.GetIndex(indexName, nil)
 	if err == nil {
+		zap.L().Info("Skipping fts index creation as already present", zap.String("name", indexName))
 		return nil
 	}
 
@@ -156,6 +161,7 @@ func CreateFtsIndexes(cluster *gocb.Cluster) error {
 		return err
 	}
 
+	zap.L().Info("Creating fts index", zap.String("name", indexName))
 	params := map[string]interface{}{
 		"doc_config": map[string]interface{}{
 			"mode":       "scope.collection.type_field",
@@ -186,8 +192,27 @@ func CreateFtsIndexes(cluster *gocb.Cluster) error {
 		SourceType:   "gocbcore",
 		PlanParams:   nil,
 	}, nil)
+	if err != nil {
+		return nil
+	}
 
-	return err
+	zap.L().Info("Checking fts index is ready to use", zap.String("name", indexName))
+
+	end := time.Now().Add(time.Minute)
+	for time.Now().Before(end) {
+		_, err = cluster.SearchQuery(
+			"interest-index",
+			search.NewMatchQuery("Painting"),
+			nil,
+		)
+		if err != nil {
+			time.Sleep(time.Second * 10)
+		} else {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("timed out waiting for fts index to be ready: %s", err.Error())
 }
 
 func (w userProfile) Functions() map[string]func(ctx context.Context, rctx workload.Runctx) error {

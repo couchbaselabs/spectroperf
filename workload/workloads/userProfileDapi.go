@@ -114,7 +114,7 @@ func (w userProfileDapi) Setup() error {
 		return err
 	}
 
-	err = CreateFtsIndexes(w.cluster)
+	err = EnsureFtsIndex(w.cluster)
 	if err != nil {
 		return err
 	}
