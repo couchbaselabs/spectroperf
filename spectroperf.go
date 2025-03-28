@@ -63,27 +63,19 @@ func main() {
 		}
 	}
 
-	caCert, err := os.ReadFile(config.Cert)
-	if err != nil {
-		zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
-	}
 	caCertPool := x509.NewCertPool()
-	caCertPool.AppendCertsFromPEM(caCert)
+	if config.Cert != "" {
+		caCert, err := os.ReadFile(config.Cert)
+		if err != nil {
+			zap.L().Fatal("Failed to read certificate", zap.String("error", err.Error()))
+		}
+
+		caCertPool.AppendCertsFromPEM(caCert)
+	}
 
 	if config.RampTime > config.RunTime/2 {
 		zap.L().Fatal("Ramp time cannot be greater than half of the total runtime")
 	}
-
-	// TODO: add a param to set this up if debugging gocb issues.  Probably with the system logger.
-	// gocb.SetLogger(gocb.VerboseStdioLogger())
-
-	// TODO: sometimes you need a Cert for couchbase2://, and then need to laod it and pass it as part of the security config
-	// caCert, err := os.ReadFile("gateway-CA.crt")
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-	// caCertPool := x509.NewCertPool()
-	// caCertPool.AppendCertsFromPEM(caCert)
 
 	// Set up OpenTelemetry.
 	otelShutdown, tracer, err := workload.SetupOTelSDK(context.Background(), config.OtlpEndpoint, config.EnableTracing, config.OtelExporterHeaders)
@@ -100,7 +92,7 @@ func main() {
 			Username: config.Username,
 			Password: config.Password,
 		},
-		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: config.TlsSkipVerify},
+		SecurityConfig: gocb.SecurityConfig{TLSSkipVerify: config.TlsSkipVerify, TLSRootCAs: caCertPool},
 		Tracer:         tracer,
 	}
 
@@ -167,7 +159,7 @@ type Flags struct {
 func parseFlags() Flags {
 	flags := Flags{}
 	flag.StringVar(&flags.Connstr, "connstr", "", "connection string of the cluster under test")
-	flag.StringVar(&flags.Cert, "Cert", "rootCA.crt", "path to certificate file")
+	flag.StringVar(&flags.Cert, "Cert", "", "path to certificate file")
 	flag.StringVar(&flags.Username, "Username", "Administrator", "Username for cluster under test")
 	flag.StringVar(&flags.Password, "password", "password", "password of the cluster under test")
 	flag.StringVar(&flags.Bucket, "Bucket", "data", "Bucket name")
