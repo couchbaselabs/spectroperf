@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/brianvoe/gofakeit"
+	"github.com/couchbase/gocb/v2"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -13,6 +14,7 @@ import (
 	"math/rand"
 	"net/http"
 	"net/http/httptrace"
+	"strings"
 	"time"
 )
 
@@ -24,10 +26,11 @@ type userProfileDapi struct {
 	numItems   int
 	bucket     string
 	scope      string
-	collection string
+	collection *gocb.Collection
+	cluster    *gocb.Cluster
 }
 
-func NewUserProfileDapi(connstr string, bucket string, scope string, collection string, numItems int, usr string, pwd string) userProfileDapi {
+func NewUserProfileDapi(connstr string, bucket string, scope string, collection *gocb.Collection, numItems int, usr string, pwd string, cluster *gocb.Cluster) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
 			MaxConnsPerHost:     500,
@@ -50,6 +53,7 @@ func NewUserProfileDapi(connstr string, bucket string, scope string, collection 
 		bucket:     bucket,
 		scope:      scope,
 		collection: collection,
+		cluster:    cluster,
 	}
 }
 
@@ -59,12 +63,27 @@ func (w userProfileDapi) GenerateDocument(id string) workload.DocType {
 	rng := rand.NewSource(int64(workload.RandSeed))
 	r := rand.New(rng)
 
+	var interests string
+	numberOfInterests := rand.Intn(10)
+	for i := 0; i < numberOfInterests; i++ {
+		interest := Interests[rand.Intn(len(Interests))]
+
+		if i == 0 {
+			interests = interest
+		} else {
+			if !strings.Contains(interests, interest) {
+				interests = interests + ", " + interest
+			}
+		}
+	}
+
 	iu := User{
-		Name:    gofakeit.Name(),
-		Email:   gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
-		Created: gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
-		Status:  gofakeit.Paragraph(1, r.Intn(8)+1, r.Intn(12)+1, "\n"),
-		Enabled: true,
+		Name:      gofakeit.Name(),
+		Email:     gofakeit.Email(), // TODO: make the email actually based on the name (pedantic)
+		Created:   gofakeit.DateRange(time.Date(1970, 1, 1, 0, 0, 0, 0, time.Local), time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local)),
+		Status:    gofakeit.Paragraph(1, r.Intn(8)+1, r.Intn(12)+1, "\n"),
+		Interests: interests,
+		Enabled:   true,
 	}
 
 	return workload.DocType{
@@ -88,8 +107,18 @@ func (w userProfileDapi) Probabilities() [][]float64 {
 }
 
 func (w userProfileDapi) Setup() error {
-	// TODO setup FTS index here for findRelatedProfile
 	gofakeit.Seed(int64(workload.RandSeed))
+
+	err := CreateQueryIndex(w.collection)
+	if err != nil {
+		return err
+	}
+
+	err = EnsureFtsIndex(w.cluster)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -119,7 +148,7 @@ func (w userProfileDapi) executeRequest(req *http.Request) (*http.Response, erro
 // Fetch a random profile in the range of profiles
 func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
+	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
@@ -151,7 +180,7 @@ func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx)
 // Update the status of a random profile
 func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
+	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
@@ -208,7 +237,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 // Lock a random user profile by setting 'Enabled' to false
 func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
-	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection, id)
+	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
@@ -272,7 +301,7 @@ type DapiUserQueryResponse struct {
 
 func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
-	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE Email LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection, toFind)
+	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE Email LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection.Name(), toFind)
 	payload := DapiQueryPayload{
 		Statement: query,
 	}
@@ -308,6 +337,69 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 	return nil
 }
 
+type DapiSearchQueryPayload struct {
+	Query SearchQuery `json:"query"`
+}
+
+type SearchQuery struct {
+	Query string `json:"query"`
+}
+
+type DapiUserSearchQueryResponse struct {
+	Results []SearchQueryResult `json:"hits"`
+}
+
+type SearchQueryResult struct {
+	Id string `json:"id"`
+}
+
 func (w userProfileDapi) findRelatedProfiles(ctx context.Context, rctx workload.Runctx) error {
+	interestToFind := Interests[rand.Intn(len(Interests))]
+
+	rctx.Logger().Sugar().Debugf("Finding profiles that contain the interest %s", interestToFind)
+
+	requestURL := fmt.Sprintf("%s/_p/fts/api/index/interest-index/query", w.connstr)
+	payload := DapiSearchQueryPayload{
+		Query: SearchQuery{
+			Query: interestToFind,
+		},
+	}
+
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", requestURL, bytes.NewBuffer(body))
+	if err != nil {
+		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := w.executeRequest(req)
+	if err != nil {
+		return fmt.Errorf("could not execute search query request: %s", err.Error())
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("could not read response body: %s", err.Error())
+	}
+
+	err = resp.Body.Close()
+	if err != nil {
+		return fmt.Errorf("could not close response body: %s", err.Error())
+	}
+
+	var results DapiUserSearchQueryResponse
+	err = json.Unmarshal(bodyBytes, &results)
+	if err != nil {
+		return fmt.Errorf("could not unmarshal response body - %s : %s", string(bodyBytes), err.Error())
+	}
+
+	var matchingUsers []string
+	for _, result := range results.Results {
+		matchingUsers = append(matchingUsers, result.Id)
+	}
+
+	rctx.Logger().Sugar().Debugf("Found users interested in %s: %v\n", interestToFind, matchingUsers)
+
 	return nil
 }

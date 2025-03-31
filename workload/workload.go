@@ -70,6 +70,7 @@ func Setup(w Workload, numItemsArg int, scp *gocb.Scope, coll *gocb.Collection) 
 	shutdownChan := make(chan struct{}, numConc)
 	var wg sync.WaitGroup
 
+	zap.L().Info("Inserting documents", zap.Int("number of docs", numItemsArg))
 	wg.Add(numConc)
 	for i := 0; i < numConc; i++ {
 		go func() {

@@ -112,9 +112,9 @@ func main() {
 	var w workload.Workload
 	switch config.Workload {
 	case "user-profile":
-		w = workloads.NewUserProfile(config.NumItems, bucket.Scope(config.Scope), collection)
+		w = workloads.NewUserProfile(config.NumItems, bucket.Scope(config.Scope), collection, cluster)
 	case "user-profile-dapi":
-		w = workloads.NewUserProfileDapi(config.DapiConnstr, config.Bucket, config.Scope, config.Collection, config.NumItems, config.Username, config.Password)
+		w = workloads.NewUserProfileDapi(config.DapiConnstr, config.Bucket, config.Scope, collection, config.NumItems, config.Username, config.Password, cluster)
 	default:
 		zap.L().Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}
