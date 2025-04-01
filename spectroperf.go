@@ -33,8 +33,12 @@ import (
 
 var wg sync.WaitGroup
 
-func init() {
-	zap.ReplaceGlobals(zap.Must(zap.NewProduction())) // TODO: replace this with a logger from CLI
+func initLogger(debug bool) {
+	if debug {
+		zap.ReplaceGlobals(zap.Must(zap.NewDevelopment()))
+	} else {
+		zap.ReplaceGlobals(zap.Must(zap.NewProduction())) // TODO: replace this with a logger from CLI
+	}
 }
 
 func main() {
@@ -48,6 +52,8 @@ func main() {
 	}
 
 	zap.L().Info("Successfully parsed config", zap.String("Config", fmt.Sprintf("%+v", config)))
+
+	initLogger(config.Debug)
 
 	if config.Connstr == "" {
 		zap.L().Fatal("No connection string provided")
@@ -154,6 +160,7 @@ type Flags struct {
 	OtlpEndpoint        string
 	EnableTracing       bool
 	OtelExporterHeaders string
+	Debug               bool
 }
 
 func parseFlags() Flags {
@@ -176,6 +183,7 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", workload.DefaultOtlpEndpoint, "endpoint OTEL traces will be exported to")
 	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
 	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
+	flag.BoolVar(&flags.Debug, "debug", false, "turn on debug level logging")
 	flag.Parse()
 
 	return flags
