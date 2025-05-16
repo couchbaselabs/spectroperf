@@ -19,11 +19,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/BurntSushi/toml"
 	"log"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/BurntSushi/toml"
 
 	"github.com/couchbase/gocb/v2"
 	"github.com/couchbaselabs/spectroperf/workload"
@@ -125,6 +126,15 @@ func main() {
 		zap.L().Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}
 
+	if len(config.MarkovChain) != 0 {
+		if err := validateMarkovChain(len(w.Operations()), config.MarkovChain); err != nil {
+			zap.L().Fatal("Invalid Markov Chain", zap.Error(err))
+		}
+	} else {
+		zap.L().Info("No Markov Chain provided, using built in workload proabilities")
+		config.MarkovChain = w.Probabilities()
+	}
+
 	workload.InitMetrics(w)
 
 	zap.L().Info("Setting up for workload", zap.String("workload", config.Workload))
@@ -135,7 +145,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
+	workload.Run(w, config.MarkovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
 
 	wg.Wait()
 
@@ -161,6 +171,7 @@ type Flags struct {
 	EnableTracing       bool
 	OtelExporterHeaders string
 	Debug               bool
+	MarkovChain         [][]float64
 }
 
 func parseFlags() Flags {
@@ -187,4 +198,36 @@ func parseFlags() Flags {
 	flag.Parse()
 
 	return flags
+}
+
+// validateMarkov chain checks that the markov chain from the config file
+// valid by making sure that:
+// - all rows sum to 1
+// - is square
+// - has dimensions equal to number of workload operations
+func validateMarkovChain(workloadOperations int, mChain [][]float64) error {
+	zap.L().Info("Validating Markov chain from config file")
+
+	dimensionError := fmt.Errorf("Markov chain must be square array with dimensions equal to number of workload functions")
+
+	if len(mChain) != workloadOperations {
+		return dimensionError
+	}
+
+	for _, row := range mChain {
+		if len(row) != workloadOperations {
+			return dimensionError
+		}
+
+		var total float64
+		for _, probability := range row {
+			total += probability
+		}
+
+		if total != 1 {
+			return fmt.Errorf("Markov Chain row does not sum to 1: %v", row)
+		}
+	}
+
+	return nil
 }
