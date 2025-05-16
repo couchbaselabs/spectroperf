@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
@@ -52,9 +53,8 @@ func main() {
 		}
 	}
 
-	zap.L().Info("Successfully parsed config", zap.String("Config", fmt.Sprintf("%+v", config)))
-
 	initLogger(config.Debug)
+	zap.L().Info("Successfully parsed config", zap.Any("Config", config))
 
 	if config.Connstr == "" {
 		zap.L().Fatal("No connection string provided")
@@ -105,7 +105,7 @@ func main() {
 
 	cluster, err := gocb.Connect(config.Connstr, opts)
 	if err != nil {
-		log.Fatal(fmt.Sprintf("Failed to connect to cluster: %s", err))
+		log.Fatalf("Failed to connect to cluster: %s", err)
 	}
 
 	bucket := cluster.Bucket(config.Bucket)
@@ -126,12 +126,27 @@ func main() {
 		zap.L().Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}
 
+	var markovChain [][]float64
 	if len(config.MarkovChain) != 0 {
 		if err := validateMarkovChain(len(w.Operations()), config.MarkovChain); err != nil {
-			zap.L().Fatal("Invalid Markov Chain", zap.Error(err))
+			zap.L().Fatal("invalid markov chain", zap.Error(err))
 		}
-	} else {
-		zap.L().Info("No Markov Chain provided, using built in workload proabilities")
+		markovChain = config.MarkovChain
+	}
+
+	if config.OnlyOperation != "" {
+		if len(config.MarkovChain) != 0 {
+			zap.L().Fatal("cannot specify only-operation and a markov chain", zap.Error(err))
+		}
+
+		markovChain, err = buildMarkovChain(config.OnlyOperation, w)
+		if err != nil {
+			zap.L().Fatal("building markov chain", zap.Error(err))
+		}
+	}
+
+	if len(markovChain) == 0 {
+		zap.L().Info("neither markov chain or only operation specified, using built in workload proabilities")
 		config.MarkovChain = w.Probabilities()
 	}
 
@@ -145,7 +160,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, config.MarkovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
+	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
 
 	wg.Wait()
 
@@ -172,6 +187,7 @@ type Flags struct {
 	OtelExporterHeaders string
 	Debug               bool
 	MarkovChain         [][]float64
+	OnlyOperation       string
 }
 
 func parseFlags() Flags {
@@ -195,6 +211,7 @@ func parseFlags() Flags {
 	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
 	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
 	flag.BoolVar(&flags.Debug, "debug", false, "turn on debug level logging")
+	flag.StringVar(&flags.OnlyOperation, "only-operation", "", "the only operation to run from the workload")
 	flag.Parse()
 
 	return flags
@@ -230,4 +247,24 @@ func validateMarkovChain(workloadOperations int, mChain [][]float64) error {
 	}
 
 	return nil
+}
+
+// buildMarkovChain builds a markov chain that will only perform the named
+// operation from the chosen workload
+func buildMarkovChain(operation string, w workload.Workload) ([][]float64, error) {
+	zap.L().Info("building markov chain to perform one operation", zap.String("operation", operation))
+
+	opIndex := slices.Index(w.Operations(), operation)
+	if opIndex == -1 {
+		return nil, fmt.Errorf("Chosen only-operation '%s' is not supported by workload", operation)
+	}
+
+	markovChain := make([][]float64, len(w.Operations()))
+	row := make([]float64, len(w.Operations()))
+	row[opIndex] = 1.0
+	for i := 0; i < len(w.Operations()); i++ {
+		markovChain[i] = row
+	}
+
+	return markovChain, nil
 }
