@@ -3,12 +3,6 @@ package workload
 import (
 	"context"
 	"fmt"
-	gotel "github.com/couchbase/gocb-opentelemetry"
-	"github.com/couchbase/gocb/v2"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"go.opentelemetry.io/otel/attribute"
-	"go.uber.org/zap"
 	"log"
 	"math/rand"
 	"net/http"
@@ -17,6 +11,13 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	gotel "github.com/couchbase/gocb-opentelemetry"
+	"github.com/couchbase/gocb/v2"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.uber.org/zap"
 )
 
 // A spectroperf Workload is defined by:
@@ -101,7 +102,13 @@ func Setup(w Workload, numItemsArg int, scp *gocb.Scope, coll *gocb.Collection) 
 	}
 }
 
-func Run(w Workload, numUsers int, runTime time.Duration, rampTime time.Duration, tracer *gotel.OpenTelemetryRequestTracer) {
+func Run(
+	w Workload,
+	mChain [][]float64,
+	numUsers int,
+	runTime time.Duration,
+	rampTime time.Duration,
+	tracer *gotel.OpenTelemetryRequestTracer) {
 	sigCh := make(chan os.Signal, 10)
 	ctx, cancelFn := context.WithCancel(context.Background())
 
@@ -118,7 +125,7 @@ func Run(w Workload, numUsers int, runTime time.Duration, rampTime time.Duration
 
 	wg.Add(numUsers)
 	for i := 0; i < numUsers; i++ {
-		go runLoop(ctx, w.Probabilities(), w.Functions(), w.Operations(), runTime, rampTime, i, &wg, tracer)
+		go runLoop(ctx, mChain, w.Functions(), w.Operations(), runTime, rampTime, i, &wg, tracer)
 	}
 
 	wg.Wait()
