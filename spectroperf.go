@@ -147,7 +147,7 @@ func main() {
 
 	if len(markovChain) == 0 {
 		zap.L().Info("neither markov chain or only operation specified, using built in workload proabilities")
-		config.MarkovChain = w.Probabilities()
+		markovChain = w.Probabilities()
 	}
 
 	workload.InitMetrics(w)
