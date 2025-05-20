@@ -160,7 +160,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
+	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, config.SleepMillis)
 
 	wg.Wait()
 
@@ -188,6 +188,7 @@ type Flags struct {
 	Debug               bool
 	MarkovChain         [][]float64
 	OnlyOperation       string
+	SleepMillis         int
 }
 
 func parseFlags() Flags {
@@ -212,6 +213,7 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
 	flag.BoolVar(&flags.Debug, "debug", false, "turn on debug level logging")
 	flag.StringVar(&flags.OnlyOperation, "only-operation", "", "the only operation to run from the workload")
+	flag.IntVar(&flags.SleepMillis, "sleep-millis", -1, "time to sleep between operations in millisecconds")
 	flag.Parse()
 
 	return flags

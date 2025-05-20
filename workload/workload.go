@@ -108,7 +108,9 @@ func Run(
 	numUsers int,
 	runTime time.Duration,
 	rampTime time.Duration,
-	tracer *gotel.OpenTelemetryRequestTracer) {
+	tracer *gotel.OpenTelemetryRequestTracer,
+	sleepMillis int,
+) {
 	sigCh := make(chan os.Signal, 10)
 	ctx, cancelFn := context.WithCancel(context.Background())
 
@@ -125,7 +127,7 @@ func Run(
 
 	wg.Add(numUsers)
 	for i := 0; i < numUsers; i++ {
-		go runLoop(ctx, mChain, w.Functions(), w.Operations(), runTime, rampTime, i, &wg, tracer)
+		go runLoop(ctx, mChain, sleepMillis, w.Functions(), w.Operations(), runTime, rampTime, i, &wg, tracer)
 	}
 
 	wg.Wait()
@@ -134,6 +136,7 @@ func Run(
 func runLoop(
 	ctx context.Context,
 	probabilities [][]float64,
+	sleepMillis int,
 	functions map[string]func(context.Context, Runctx) error,
 	operations []string,
 	runTime time.Duration,
@@ -176,8 +179,14 @@ func runLoop(
 			nextFunction := operations[nextOpIndex]
 			slog.Debug(nextFunction)
 
-			// sleep a random amount of time
-			t := r.Int31n(5000-400) + 400
+			var t int32
+			if sleepMillis == -1 {
+				// sleep a random amount of time up to 5 seconds
+				t = r.Int31n(5000-400) + 400
+			} else {
+				t = int32(sleepMillis)
+			}
+
 			time.Sleep(time.Duration(t) * time.Millisecond)
 
 			phase := MetricState(runStart, runEnd, rampTime)
