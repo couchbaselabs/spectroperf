@@ -17,7 +17,6 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -44,34 +43,20 @@ func initLogger(debug bool) {
 }
 
 func main() {
-	config := parseFlags()
+	if len(os.Args) < 2 {
+		zap.L().Fatal("please supply a path to the config file")
+	}
+	configFilePath := os.Args[1]
 
-	if config.configFile != "" {
-		_, err := toml.DecodeFile(config.configFile, &config)
-		if err != nil {
-			zap.L().Fatal("Error decoding config file", zap.Error(err))
-		}
+	config, err := createConfig(configFilePath)
+	if err != nil {
+		zap.L().Fatal("creating config", zap.Error(err))
 	}
 
 	initLogger(config.Debug)
-	zap.L().Info("Successfully parsed config", zap.Any("Config", config))
 
-	if config.Connstr == "" {
-		zap.L().Fatal("No connection string provided")
-	}
-
-	if config.SleepMillis != -1 && config.SleepMillis < 100 {
-		zap.L().Fatal("sleep millis cannot be less than 100, to increase throughput increase number of users")
-	}
-
-	if !config.EnableTracing {
-		if config.OtlpEndpoint != workload.DefaultOtlpEndpoint {
-			zap.L().Fatal("Otlp endpoint provided but tracing disabled")
-		}
-
-		if config.OtelExporterHeaders != "" {
-			zap.L().Fatal("OtelExporterHeaders provided but tracing disabled")
-		}
+	if err := validateConfig(*config); err != nil {
+		zap.L().Fatal("invalid config provided", zap.Error(err))
 	}
 
 	caCertPool := x509.NewCertPool()
@@ -82,10 +67,6 @@ func main() {
 		}
 
 		caCertPool.AppendCertsFromPEM(caCert)
-	}
-
-	if config.RampTime > config.RunTime/2 {
-		zap.L().Fatal("Ramp time cannot be greater than half of the total runtime")
 	}
 
 	// Set up OpenTelemetry.
@@ -126,6 +107,8 @@ func main() {
 		w = workloads.NewUserProfile(config.NumItems, bucket.Scope(config.Scope), collection, cluster)
 	case "user-profile-dapi":
 		w = workloads.NewUserProfileDapi(config.DapiConnstr, config.Bucket, config.Scope, collection, config.NumItems, config.Username, config.Password, cluster)
+	case "basic-dapi":
+		w = workloads.NewBasicDapi(config.DapiConnstr, config.Bucket, config.Scope, collection, config.NumItems, config.Username, config.Password, cluster)
 	default:
 		zap.L().Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}
@@ -170,57 +153,89 @@ func main() {
 
 }
 
-type Flags struct {
-	Connstr             string
-	Cert                string
-	Username            string
-	Password            string
-	Bucket              string
-	Scope               string
-	Collection          string
-	NumItems            int
-	NumUsers            int
-	TlsSkipVerify       bool
-	Workload            string
-	DapiConnstr         string
-	RunTime             int
-	RampTime            int
-	configFile          string
-	OtlpEndpoint        string
-	EnableTracing       bool
-	OtelExporterHeaders string
-	Debug               bool
-	MarkovChain         [][]float64
-	OnlyOperation       string
-	SleepMillis         int
+type Config struct {
+	Connstr             string      // connection string of the cluster under test
+	Cert                string      // path to the certificate file
+	Username            string      // username for the cluster under test
+	Password            string      // password for the cluster under test
+	Bucket              string      // bucket name
+	Scope               string      // scope name
+	Collection          string      // collection name
+	NumItems            int         // number of docs to create
+	NumUsers            int         // number of concurrent simulated users accessing the data
+	TlsSkipVerify       bool        // skip tls certificate verification
+	Workload            string      // workload name
+	DapiConnstr         string      // connection string for data api
+	RunTime             int         // total time to run the workload in minutes
+	RampTime            int         // length of ramp-(up/down) periods in minutes
+	OtlpEndpoint        string      // endpoint otel traces will be exported to
+	EnableTracing       bool        // enables otel tracing
+	OtelExporterHeaders string      // a comma separated list of otlp exporter headers e.g 'header1=value1,header2=value2'
+	Debug               bool        //turn on debug level logging
+	MarkovChain         [][]float64 // custom markov chain to change workload probability matrix
+	OnlyOperation       string      // the only operation to run from the workload
+	SleepMillis         int         // time to sleep between operations in milliseconds
 }
 
-func parseFlags() Flags {
-	flags := Flags{}
-	flag.StringVar(&flags.Connstr, "connstr", "", "connection string of the cluster under test")
-	flag.StringVar(&flags.Cert, "Cert", "", "path to certificate file")
-	flag.StringVar(&flags.Username, "Username", "Administrator", "Username for cluster under test")
-	flag.StringVar(&flags.Password, "password", "password", "password of the cluster under test")
-	flag.StringVar(&flags.Bucket, "Bucket", "data", "Bucket name")
-	flag.StringVar(&flags.Scope, "Scope", "identity", "Scope name")
-	flag.StringVar(&flags.Collection, "Collection", "profiles", "Collection name")
-	flag.IntVar(&flags.NumItems, "num-items", 200000, "number of docs to create")
-	flag.IntVar(&flags.NumUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
-	flag.BoolVar(&flags.TlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
-	flag.StringVar(&flags.Workload, "workload", "", "workload name")
-	flag.StringVar(&flags.DapiConnstr, "dapi-connstr", "", "connection string for data api")
-	flag.IntVar(&flags.RunTime, "run-time", 5, "total time to run the workload in minutes")
-	flag.IntVar(&flags.RampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
-	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
-	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", workload.DefaultOtlpEndpoint, "endpoint OTEL traces will be exported to")
-	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
-	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
-	flag.BoolVar(&flags.Debug, "debug", false, "turn on debug level logging")
-	flag.StringVar(&flags.OnlyOperation, "only-operation", "", "the only operation to run from the workload")
-	flag.IntVar(&flags.SleepMillis, "sleep-millis", -1, "time to sleep between operations in millisecconds")
-	flag.Parse()
+// createConfig creates a spectroperf configuration from the harcoded defaults
+// and the contents of the provided config file
+func createConfig(configPath string) (*Config, error) {
+	zap.L().Info("creating spectroperf config", zap.String("config file", configPath))
 
-	return flags
+	defaultConfig := Config{
+		Username:      "Administrator",
+		Password:      "password",
+		Bucket:        "data",
+		Scope:         "identity",
+		Collection:    "profiles",
+		NumItems:      500,
+		NumUsers:      500,
+		TlsSkipVerify: false,
+		RunTime:       5,
+		RampTime:      1,
+		OtlpEndpoint:  workload.DefaultOtlpEndpoint,
+		EnableTracing: false,
+		Debug:         false,
+		SleepMillis:   -1,
+	}
+
+	_, err := toml.DecodeFile(configPath, &defaultConfig)
+	if err != nil {
+		return nil, fmt.Errorf("decoding config file", zap.Error(err))
+	}
+
+	zap.L().Info("Successfully parsed config", zap.Any("Config", defaultConfig))
+
+	return &defaultConfig, nil
+}
+
+// validateConfig ensures that the created config is valid
+func validateConfig(config Config) error {
+	zap.L().Info("validating spectroperf config", zap.Any("config", config))
+
+	if config.Connstr == "" {
+		return fmt.Errorf("no connection string provided")
+	}
+
+	if config.RampTime > config.RunTime/2 {
+		return fmt.Errorf("ramp time cannot be greater than half of the total run time")
+	}
+
+	if config.SleepMillis != -1 && config.SleepMillis < 100 {
+		return fmt.Errorf("sleep millis cannot be less than 100, to increase throughput increase number of users")
+	}
+
+	if !config.EnableTracing {
+		if config.OtlpEndpoint != workload.DefaultOtlpEndpoint {
+			return fmt.Errorf("otlp endpoint provided but tracing disabled")
+		}
+
+		if config.OtelExporterHeaders != "" {
+			return fmt.Errorf("otelExporterHeaders provided but tracing disabled")
+		}
+	}
+
+	return nil
 }
 
 // validateMarkov chain checks that the markov chain from the config file
