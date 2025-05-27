@@ -60,6 +60,10 @@ func main() {
 		zap.L().Fatal("No connection string provided")
 	}
 
+	if config.SleepMillis != -1 && config.SleepMillis < 100 {
+		zap.L().Fatal("sleep millis cannot be less than 100, to increase throughput increase number of users")
+	}
+
 	if !config.EnableTracing {
 		if config.OtlpEndpoint != workload.DefaultOtlpEndpoint {
 			zap.L().Fatal("Otlp endpoint provided but tracing disabled")
