@@ -60,6 +60,21 @@ func main() {
 		zap.L().Fatal("No connection string provided")
 	}
 
+	var sleep time.Duration
+	var err error
+	if config.Sleep == "" {
+		zap.L().Info("no sleep set, random sleep duration will be used")
+	} else {
+		sleep, err = time.ParseDuration(config.Sleep)
+		if err != nil {
+			zap.L().Fatal("parsing sleep duration from config", zap.Error(err))
+		}
+
+		if sleep < time.Duration(time.Millisecond*100) {
+			zap.L().Fatal("sleep cannot be less than 100ms, to increase throughput increase number of users")
+		}
+	}
+
 	if !config.EnableTracing {
 		if config.OtlpEndpoint != workload.DefaultOtlpEndpoint {
 			zap.L().Fatal("Otlp endpoint provided but tracing disabled")
@@ -160,7 +175,7 @@ func main() {
 	time.Sleep(5 * time.Second)
 
 	zap.L().Info("Running workload…\n")
-	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer)
+	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, sleep)
 
 	wg.Wait()
 
@@ -188,6 +203,7 @@ type Flags struct {
 	Debug               bool
 	MarkovChain         [][]float64
 	OnlyOperation       string
+	Sleep               string
 }
 
 func parseFlags() Flags {
@@ -212,6 +228,7 @@ func parseFlags() Flags {
 	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
 	flag.BoolVar(&flags.Debug, "debug", false, "turn on debug level logging")
 	flag.StringVar(&flags.OnlyOperation, "only-operation", "", "the only operation to run from the workload")
+	flag.StringVar(&flags.Sleep, "sleep", "", "time to sleep between operations")
 	flag.Parse()
 
 	return flags
