@@ -193,7 +193,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster) error {
 		PlanParams:   nil,
 	}, nil)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	zap.L().Info("Checking fts index is ready to use", zap.String("name", indexName))
