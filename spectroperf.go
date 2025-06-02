@@ -18,7 +18,6 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-
 	"fmt"
 	"os"
 	"slices"
@@ -194,6 +193,8 @@ func startSpectroperf() {
 		w = workloads.NewUserProfile(logger, bucket.Name(), config.NumItems, bucket.Scope(config.Scope), collection, cluster)
 	case "user-profile-dapi":
 		w = workloads.NewUserProfileDapi(logger, config, collection, cluster)
+	case "basic-dapi":
+		w = workloads.NewBasicDapi(config, collection, cluster)
 	default:
 		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}

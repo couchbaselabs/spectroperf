@@ -27,7 +27,7 @@ import (
 //   - The probability matrix defining the likelihood of one operation being followed by another
 type Workload interface {
 	// GenerateDocument creates a random document appropriate for the workload
-	GenerateDocument(id string) DocType
+	GenerateDocument(id int) DocType
 	// Operations returns The list of operations that a workload supports
 	Operations() []string
 	// Probabilities returns the probability matrix for the workload
@@ -93,7 +93,7 @@ func Setup(w Workload, logger *zap.Logger, numItemsArg int, scp *gocb.Scope, col
 
 	// Create a random document using the given workload definition
 	for i := 0; i < numItemsArg; i++ {
-		workChan <- w.GenerateDocument(fmt.Sprintf("u%d", i))
+		workChan <- w.GenerateDocument(i)
 	}
 
 	// Call the workload's own Setup function to perform any workload specific setup
