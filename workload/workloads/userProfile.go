@@ -3,6 +3,10 @@ package workloads
 import (
 	"context"
 	"fmt"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/brianvoe/gofakeit"
 	gotel "github.com/couchbase/gocb-opentelemetry"
 	"github.com/couchbase/gocb/v2"
@@ -11,21 +15,20 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
-	"math/rand"
-	"strings"
-	"time"
 )
 
 type userProfile struct {
 	numItems   int
+	bucket     string
 	scope      *gocb.Scope
 	collection *gocb.Collection
 	cluster    *gocb.Cluster
 }
 
-func NewUserProfile(numItems int, scope *gocb.Scope, collection *gocb.Collection, cluster *gocb.Cluster) userProfile {
+func NewUserProfile(numItems int, bucket string, scope *gocb.Scope, collection *gocb.Collection, cluster *gocb.Cluster) userProfile {
 	return userProfile{
 		numItems:   numItems,
+		bucket:     bucket,
 		scope:      scope,
 		collection: collection,
 		cluster:    cluster,
@@ -123,7 +126,7 @@ func (w userProfile) Setup() error {
 		return err
 	}
 
-	err = EnsureFtsIndex(w.cluster)
+	err = EnsureFtsIndex(w.cluster, w.bucket, w.scope.Name(), w.collection.Name())
 	if err != nil {
 		return err
 	}
@@ -147,7 +150,7 @@ func CreateQueryIndex(collection *gocb.Collection) error {
 	return nil
 }
 
-func EnsureFtsIndex(cluster *gocb.Cluster) error {
+func EnsureFtsIndex(cluster *gocb.Cluster, bucket, scope, collection string) error {
 	indexName := "interest-index"
 	mgr := cluster.SearchIndexes()
 
@@ -161,6 +164,8 @@ func EnsureFtsIndex(cluster *gocb.Cluster) error {
 		return err
 	}
 
+	indexScope := fmt.Sprintf("%s.%s", scope, collection)
+
 	zap.L().Info("Creating fts index", zap.String("name", indexName))
 	params := map[string]interface{}{
 		"doc_config": map[string]interface{}{
@@ -173,7 +178,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster) error {
 				"enabled": false,
 			},
 			"types": map[string]interface{}{
-				"identity.profiles": map[string]interface{}{
+				indexScope: map[string]interface{}{
 					"dynamic": true,
 					"enabled": true,
 				},
@@ -184,7 +189,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster) error {
 	err = mgr.UpsertIndex(gocb.SearchIndex{
 		UUID:         "",
 		Name:         indexName,
-		SourceName:   "data",
+		SourceName:   bucket,
 		Type:         "fulltext-index",
 		Params:       params,
 		SourceUUID:   "",
@@ -201,7 +206,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster) error {
 	end := time.Now().Add(time.Minute)
 	for time.Now().Before(end) {
 		_, err = cluster.SearchQuery(
-			"interest-index",
+			indexName,
 			search.NewMatchQuery("Painting"),
 			nil,
 		)
@@ -287,7 +292,7 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
 	span := trace.SpanFromContext(ctx)
 
-	query := "SELECT * FROM profiles WHERE Email LIKE $email LIMIT 1"
+	query := fmt.Sprintf("SELECT * FROM %s WHERE Email LIKE $email LIMIT 1", w.collection.Name())
 	rctx.Logger().Sugar().Debugf("Querying with %s using param %s", query, toFind)
 	params := make(map[string]interface{}, 1)
 	params["email"] = toFind

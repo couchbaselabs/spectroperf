@@ -5,17 +5,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/brianvoe/gofakeit"
-	"github.com/couchbase/gocb/v2"
-	"github.com/couchbaselabs/spectroperf/workload"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"io"
 	"math/rand"
 	"net/http"
 	"net/http/httptrace"
 	"strings"
 	"time"
+
+	"github.com/brianvoe/gofakeit"
+	"github.com/couchbase/gocb/v2"
+	"github.com/couchbaselabs/spectroperf/workload"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type userProfileDapi struct {
@@ -114,7 +115,7 @@ func (w userProfileDapi) Setup() error {
 		return err
 	}
 
-	err = EnsureFtsIndex(w.cluster)
+	err = EnsureFtsIndex(w.cluster, w.bucket, w.scope, w.collection.Name())
 	if err != nil {
 		return err
 	}
