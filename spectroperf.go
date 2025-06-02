@@ -17,7 +17,7 @@ import (
 	"context"
 	"crypto/x509"
 	"errors"
-	"flag"
+
 	"fmt"
 	"log"
 	"os"
@@ -28,6 +28,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/couchbase/gocb/v2"
+	"github.com/couchbaselabs/spectroperf/configuration"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/couchbaselabs/spectroperf/workload/workloads"
 	"go.uber.org/zap"
@@ -44,17 +45,22 @@ func initLogger(debug bool) {
 }
 
 func main() {
-	config := parseFlags()
+	initLogger(false)
 
-	if config.configFile != "" {
-		_, err := toml.DecodeFile(config.configFile, &config)
+	flags := configuration.ParseFlags()
+
+	config := configuration.DefaultConfig()
+	if flags.ConfigFile != "" {
+		_, err := toml.DecodeFile(flags.ConfigFile, &config)
 		if err != nil {
 			zap.L().Fatal("Error decoding config file", zap.Error(err))
 		}
 	}
 
-	initLogger(config.Debug)
+	config = configuration.OverwriteConfigWithFlags(config)
 	zap.L().Info("Successfully parsed config", zap.Any("Config", config))
+
+	initLogger(config.Debug)
 
 	if config.Connstr == "" {
 		zap.L().Fatal("No connection string provided")
@@ -179,59 +185,6 @@ func main() {
 
 	wg.Wait()
 
-}
-
-type Flags struct {
-	Connstr             string
-	Cert                string
-	Username            string
-	Password            string
-	Bucket              string
-	Scope               string
-	Collection          string
-	NumItems            int
-	NumUsers            int
-	TlsSkipVerify       bool
-	Workload            string
-	DapiConnstr         string
-	RunTime             int
-	RampTime            int
-	configFile          string
-	OtlpEndpoint        string
-	EnableTracing       bool
-	OtelExporterHeaders string
-	Debug               bool
-	MarkovChain         [][]float64
-	OnlyOperation       string
-	Sleep               string
-}
-
-func parseFlags() Flags {
-	flags := Flags{}
-	flag.StringVar(&flags.Connstr, "connstr", "", "connection string of the cluster under test")
-	flag.StringVar(&flags.Cert, "Cert", "", "path to certificate file")
-	flag.StringVar(&flags.Username, "Username", "Administrator", "Username for cluster under test")
-	flag.StringVar(&flags.Password, "password", "password", "password of the cluster under test")
-	flag.StringVar(&flags.Bucket, "Bucket", "data", "Bucket name")
-	flag.StringVar(&flags.Scope, "Scope", "identity", "Scope name")
-	flag.StringVar(&flags.Collection, "Collection", "profiles", "Collection name")
-	flag.IntVar(&flags.NumItems, "num-items", 200000, "number of docs to create")
-	flag.IntVar(&flags.NumUsers, "num-users", 50000, "number of concurrent simulated users accessing the data")
-	flag.BoolVar(&flags.TlsSkipVerify, "tls-skip-verify", false, "skip TLS certificate verification")
-	flag.StringVar(&flags.Workload, "workload", "", "workload name")
-	flag.StringVar(&flags.DapiConnstr, "dapi-connstr", "", "connection string for data api")
-	flag.IntVar(&flags.RunTime, "run-time", 5, "total time to run the workload in minutes")
-	flag.IntVar(&flags.RampTime, "ramp-time", 1, "length of ramp-up and ramp-down periods in minutes")
-	flag.StringVar(&flags.configFile, "config-file", "", "path to configuration file")
-	flag.StringVar(&flags.OtlpEndpoint, "otlp-endpoint", workload.DefaultOtlpEndpoint, "endpoint OTEL traces will be exported to")
-	flag.BoolVar(&flags.EnableTracing, "enable-tracing", false, "enables OTEL tracing")
-	flag.StringVar(&flags.OtelExporterHeaders, "otel-exporter-headers", "", "a comma seperated list of otlp expoter headers, e.g 'header1=value1,header2=value2'")
-	flag.BoolVar(&flags.Debug, "debug", false, "turn on debug level logging")
-	flag.StringVar(&flags.OnlyOperation, "only-operation", "", "the only operation to run from the workload")
-	flag.StringVar(&flags.Sleep, "sleep", "", "time to sleep between operations")
-	flag.Parse()
-
-	return flags
 }
 
 // validateMarkov chain checks that the markov chain from the config file
