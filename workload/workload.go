@@ -2,6 +2,7 @@ package workload
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -131,6 +132,70 @@ func Run(
 	}
 
 	wg.Wait()
+
+	type latencies struct {
+		NinetyNinth float64 `json:"ninetyNinth"`
+		Fiftieth    float64 `json:"fiftieth"`
+	}
+
+	type operationResult struct {
+		Total              int       `json:"total"`
+		Failed             int       `json:"failed"`
+		LatencyPercentiles latencies `json:"latencyPercentiles"`
+	}
+
+	if IsPrometheusRunning() {
+		zap.L().Sugar().Info("scraping operation metrics from prometheus to write to file")
+		timeRange := int(runTime.Minutes()) + 1
+		output := map[string]operationResult{}
+		for _, op := range w.Operations() {
+			total, err := TotalOperations(op, timeRange)
+			if err != nil {
+				zap.L().Sugar().Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
+				continue
+			}
+
+			totalFailed, err := TotalOperationsFailed(op, timeRange)
+			if err != nil {
+				zap.L().Sugar().Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
+				continue
+			}
+
+			ninetyNinth, err := NinetyNithPercentileLatency(op, timeRange)
+			if err != nil {
+				zap.L().Sugar().Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
+				continue
+			}
+
+			fiftieth, err := FiftiethPercentileLatency(op, timeRange)
+			if err != nil {
+				zap.L().Sugar().Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
+				continue
+			}
+
+			output[op] = operationResult{
+				Total:  total,
+				Failed: totalFailed,
+				LatencyPercentiles: latencies{
+					NinetyNinth: ninetyNinth,
+					Fiftieth:    fiftieth,
+				},
+			}
+		}
+
+		bytes, err := json.Marshal(output)
+		if err != nil {
+			panic(err)
+		}
+
+		timeStamp := time.Now().UTC().Format(time.RFC3339)
+		err = os.WriteFile(fmt.Sprintf("%s.json", timeStamp), bytes, 0644)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		zap.L().Sugar().Info("skipping writing metrics to file as prometheus is not running")
+	}
 }
 
 func runLoop(
