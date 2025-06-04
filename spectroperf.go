@@ -192,7 +192,7 @@ func startSpectroperf() {
 	case "user-profile":
 		w = workloads.NewUserProfile(logger, bucket.Name(), config.NumItems, bucket.Scope(config.Scope), collection, cluster)
 	case "user-profile-dapi":
-		w = workloads.NewUserProfileDapi(logger, config.DapiConnstr, config.Bucket, config.Scope, collection, config.NumItems, config.Username, config.Password, cluster)
+		w = workloads.NewUserProfileDapi(logger, config, collection, cluster)
 	default:
 		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}

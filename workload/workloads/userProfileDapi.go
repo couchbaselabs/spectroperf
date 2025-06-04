@@ -3,6 +3,7 @@ package workloads
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/brianvoe/gofakeit"
 	"github.com/couchbase/gocb/v2"
+	"github.com/couchbaselabs/spectroperf/configuration"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -35,18 +37,16 @@ type userProfileDapi struct {
 
 func NewUserProfileDapi(
 	logger *zap.Logger,
-	connstr string,
-	bucket string,
-	scope string,
+	config *configuration.Config,
 	collection *gocb.Collection,
-	numItems int,
-	usr string,
-	pwd string,
 	cluster *gocb.Cluster) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
 			MaxConnsPerHost:     500,
 			MaxIdleConnsPerHost: 100,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: config.TlsSkipVerify,
+			},
 		},
 		// By setting the otelhttptrace client in this transport, it can be
 		// injected into the context after the span is started, which makes the
@@ -58,13 +58,13 @@ func NewUserProfileDapi(
 
 	return userProfileDapi{
 		logger:     logger,
-		connstr:    connstr,
-		username:   usr,
-		password:   pwd,
+		connstr:    config.DapiConnstr,
+		username:   config.Username,
+		password:   config.Password,
 		client:     &http.Client{Transport: tr},
-		numItems:   numItems,
-		bucket:     bucket,
-		scope:      scope,
+		numItems:   config.NumItems,
+		bucket:     config.Bucket,
+		scope:      config.Scope,
 		collection: collection,
 		cluster:    cluster,
 	}
