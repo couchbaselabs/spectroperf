@@ -72,7 +72,7 @@ func NewUserProfileDapi(
 
 // Create a random document with a realistic size from name, email, status text and whether
 // or not the account is enabled.
-func (w userProfileDapi) GenerateDocument(id string) workload.DocType {
+func (w userProfileDapi) GenerateDocument(id int) workload.DocType {
 	rng := rand.NewSource(int64(workload.RandSeed))
 	r := rand.New(rng)
 
@@ -100,7 +100,7 @@ func (w userProfileDapi) GenerateDocument(id string) workload.DocType {
 	}
 
 	return workload.DocType{
-		Name: id,
+		Name: fmt.Sprintf("u%d", id),
 		Data: iu,
 	}
 }
