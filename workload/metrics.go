@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"go.uber.org/zap"
 )
 
 type OperationPhase string
@@ -70,8 +69,8 @@ func MetricState(start time.Time, end time.Time, rampTime time.Duration) Operati
 	return phase
 }
 
-// IsPrometheusRunning returns a bool that represents if prometheus is running.
-func IsPrometheusRunning() bool {
+// PrometheusIsRunning returns a bool that represents if prometheus is running.
+func PrometheusIsRunning() bool {
 	// Try to run the most basic prometheus metric
 	_, err := executeQuery("up")
 	return err == nil
@@ -123,6 +122,55 @@ func FiftiethPercentileLatency(op string, timeRange int) (float64, error) {
 		timeRange)
 
 	return processQuery(query, op)
+}
+
+type LatencyPercentiles struct {
+	NinetyNinth float64 `json:"ninetyNinth"`
+	Fiftieth    float64 `json:"fiftieth"`
+}
+
+// OperationSummary summarises the metrics for a whole spectroperf run for a
+// given operation. It holds the total number of that operation attempted,
+// the number that failed and some latency percentiles.
+type OperationSummary struct {
+	Total     int                `json:"total"`
+	Failed    int                `json:"failed"`
+	Latencies LatencyPercentiles `json:"latencyPercentiles"`
+}
+
+// SummariseOperationMetrics queries the http api of the prometheus instance
+// that has been scraping spectroperf to prioduce a summary of the metrics for
+// a given operation.
+func SummariseOperationMetrics(op string, timeRange int) (*OperationSummary, error) {
+	total, err := TotalOperations(op, timeRange)
+	if err != nil {
+		return nil, err
+	}
+
+	totalFailed, err := TotalOperationsFailed(op, timeRange)
+	if err != nil {
+		return nil, err
+	}
+
+	ninetyNinth, err := NinetyNithPercentileLatency(op, timeRange)
+	if err != nil {
+		return nil, err
+	}
+
+	fiftieth, err := FiftiethPercentileLatency(op, timeRange)
+	if err != nil {
+		return nil, err
+	}
+
+	summary := OperationSummary{
+		Total:  total,
+		Failed: totalFailed,
+		Latencies: LatencyPercentiles{
+			NinetyNinth: ninetyNinth,
+			Fiftieth:    fiftieth,
+		},
+	}
+	return &summary, nil
 }
 
 // The following structs combine to represent the output structure returned from
@@ -201,7 +249,6 @@ func parseQueryResult(result *queryResult) (float64, error) {
 	}
 
 	if len(result.Data.Result[0].Value) != 2 {
-		zap.L().Info("")
 		return 0, errors.New("no values for the result for operation")
 	}
 

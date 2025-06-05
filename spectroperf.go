@@ -226,12 +226,12 @@ func startSpectroperf() {
 	logger.Info("Setting up for workload", zap.String("workload", config.Workload))
 
 	// call the setup function on the workload.
-	workload.Setup(w, config.NumItems, bucket.Scope(config.Scope), collection)
+	workload.Setup(w, logger, config.NumItems, bucket.Scope(config.Scope), collection)
 
 	time.Sleep(5 * time.Second)
 
 	logger.Info("Running workload…\n")
-	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, sleep)
+	workload.Run(w, logger, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, sleep)
 
 	wg.Wait()
 
