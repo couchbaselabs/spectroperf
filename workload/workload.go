@@ -2,7 +2,6 @@ package workload
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"log/slog"
@@ -134,37 +133,6 @@ func Run(
 	}
 
 	wg.Wait()
-
-	if !PrometheusIsRunning() {
-		logger.Info("skipping writing metrics to file as prometheus is not running")
-		return
-	}
-
-	logger.Info("scraping operation metrics from prometheus to write to file")
-
-	// Add a minute onto the range to make sure none of the metrics are missed.
-	timeRange := int(runTime.Minutes()) + 1
-	metricSummaries := map[string]OperationSummary{}
-	for _, op := range w.Operations() {
-		summary, err := SummariseOperationMetrics(op, timeRange)
-		if err != nil {
-			logger.Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
-			continue
-		}
-
-		metricSummaries[op] = *summary
-	}
-
-	bytes, err := json.Marshal(metricSummaries)
-	if err != nil {
-		logger.Fatal("marshalling metric summary", zap.Error(err), zap.Any("summary", metricSummaries))
-	}
-
-	timeStamp := time.Now().UTC().Format(time.RFC3339)
-	filePath := fmt.Sprintf("%s.json", timeStamp)
-	if err := os.WriteFile(filePath, bytes, 0644); err != nil {
-		logger.Fatal("writing metric summary to file", zap.Error(err), zap.String("path", filePath))
-	}
 }
 
 func runLoop(
