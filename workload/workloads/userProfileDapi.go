@@ -3,6 +3,7 @@ package workloads
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,12 +15,15 @@ import (
 
 	"github.com/brianvoe/gofakeit"
 	"github.com/couchbase/gocb/v2"
+	"github.com/couchbaselabs/spectroperf/configuration"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.uber.org/zap"
 )
 
 type userProfileDapi struct {
+	logger     *zap.Logger
 	connstr    string
 	username   string
 	password   string
@@ -31,11 +35,18 @@ type userProfileDapi struct {
 	cluster    *gocb.Cluster
 }
 
-func NewUserProfileDapi(connstr string, bucket string, scope string, collection *gocb.Collection, numItems int, usr string, pwd string, cluster *gocb.Cluster) userProfileDapi {
+func NewUserProfileDapi(
+	logger *zap.Logger,
+	config *configuration.Config,
+	collection *gocb.Collection,
+	cluster *gocb.Cluster) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
 			MaxConnsPerHost:     500,
 			MaxIdleConnsPerHost: 100,
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: config.TlsSkipVerify,
+			},
 		},
 		// By setting the otelhttptrace client in this transport, it can be
 		// injected into the context after the span is started, which makes the
@@ -46,13 +57,14 @@ func NewUserProfileDapi(connstr string, bucket string, scope string, collection 
 	)
 
 	return userProfileDapi{
-		connstr:    connstr,
-		username:   usr,
-		password:   pwd,
+		logger:     logger,
+		connstr:    config.DapiConnstr,
+		username:   config.Username,
+		password:   config.Password,
 		client:     &http.Client{Transport: tr},
-		numItems:   numItems,
-		bucket:     bucket,
-		scope:      scope,
+		numItems:   config.NumItems,
+		bucket:     config.Bucket,
+		scope:      config.Scope,
 		collection: collection,
 		cluster:    cluster,
 	}
@@ -110,12 +122,12 @@ func (w userProfileDapi) Probabilities() [][]float64 {
 func (w userProfileDapi) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	err := CreateQueryIndex(w.collection)
+	err := CreateQueryIndex(w.logger, w.collection)
 	if err != nil {
 		return err
 	}
 
-	err = EnsureFtsIndex(w.cluster, w.bucket, w.scope, w.collection.Name())
+	err = EnsureFtsIndex(w.logger, w.cluster, w.bucket, w.scope, w.collection.Name())
 	if err != nil {
 		return err
 	}
@@ -149,6 +161,8 @@ func (w userProfileDapi) executeRequest(req *http.Request) (*http.Response, erro
 // Fetch a random profile in the range of profiles
 func (w userProfileDapi) fetchProfile(ctx context.Context, rctx workload.Runctx) error {
 	id := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
+	w.logger.Debug("fetching profile", zap.String("id", id))
+
 	requestURL := fmt.Sprintf("%s/v1/buckets/%s/scopes/%s/collections/%s/documents/%s", w.connstr, w.bucket, w.scope, w.collection.Name(), id)
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
@@ -187,6 +201,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
 
+	w.logger.Debug("getting profile to update", zap.String("id", id))
 	resp, err := w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("could not fetch profile to update: %s", err.Error())
@@ -212,7 +227,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 
 	jsonBytes, err := json.Marshal(toUd)
 	if err != nil {
-		return fmt.Errorf("could not marshal User to json: &s", err.Error())
+		return fmt.Errorf("could not marshal User to json: %w", err)
 	}
 
 	req, err = http.NewRequestWithContext(ctx, "PUT", requestURL, bytes.NewBuffer(jsonBytes))
@@ -220,6 +235,7 @@ func (w userProfileDapi) updateProfile(ctx context.Context, rctx workload.Runctx
 		panic(fmt.Errorf("failed to build profile update request: %s", err.Error()))
 	}
 
+	w.logger.Debug("upserting updated profile", zap.String("id", id))
 	resp, err = w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("error executing upsert request: %s", err.Error())
@@ -244,6 +260,7 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 		panic(fmt.Errorf("failed to build profile fetch request: %s", err.Error()))
 	}
 
+	w.logger.Debug("getting profile to lock", zap.String("id", id))
 	resp, err := w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("could not fetch profile to update: %s", err.Error())
@@ -277,6 +294,7 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 		panic(fmt.Errorf("failed to build profile update request: %s", err.Error()))
 	}
 
+	w.logger.Debug("upserting locked profile", zap.String("id", id))
 	resp, err = w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("error executing upsert request: %s", err.Error())
@@ -315,6 +333,8 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
+	w.logger.Debug("running findProfile query", zap.String("query", query))
 	resp, err := w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("could not execute query request: %s", err.Error())
@@ -357,8 +377,6 @@ type SearchQueryResult struct {
 func (w userProfileDapi) findRelatedProfiles(ctx context.Context, rctx workload.Runctx) error {
 	interestToFind := Interests[rand.Intn(len(Interests))]
 
-	rctx.Logger().Sugar().Debugf("Finding profiles that contain the interest %s", interestToFind)
-
 	requestURL := fmt.Sprintf("%s/_p/fts/api/index/interest-index/query", w.connstr)
 	payload := DapiSearchQueryPayload{
 		Query: SearchQuery{
@@ -374,6 +392,8 @@ func (w userProfileDapi) findRelatedProfiles(ctx context.Context, rctx workload.
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+
+	w.logger.Debug("performing fts search for profiles with interest", zap.String("interest", interestToFind))
 	resp, err := w.executeRequest(req)
 	if err != nil {
 		return fmt.Errorf("could not execute search query request: %s", err.Error())
@@ -399,8 +419,6 @@ func (w userProfileDapi) findRelatedProfiles(ctx context.Context, rctx workload.
 	for _, result := range results.Results {
 		matchingUsers = append(matchingUsers, result.Id)
 	}
-
-	rctx.Logger().Sugar().Debugf("Found users interested in %s: %v\n", interestToFind, matchingUsers)
 
 	return nil
 }

@@ -18,6 +18,7 @@ import (
 )
 
 type userProfile struct {
+	logger     *zap.Logger
 	numItems   int
 	bucket     string
 	scope      *gocb.Scope
@@ -25,8 +26,16 @@ type userProfile struct {
 	cluster    *gocb.Cluster
 }
 
-func NewUserProfile(numItems int, bucket string, scope *gocb.Scope, collection *gocb.Collection, cluster *gocb.Cluster) userProfile {
+func NewUserProfile(
+	logger *zap.Logger,
+	bucket string,
+	numItems int,
+	scope *gocb.Scope,
+	collection *gocb.Collection,
+	cluster *gocb.Cluster) userProfile {
+
 	return userProfile{
+		logger:     logger,
 		numItems:   numItems,
 		bucket:     bucket,
 		scope:      scope,
@@ -121,12 +130,12 @@ func (w userProfile) Probabilities() [][]float64 {
 func (w userProfile) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	err := CreateQueryIndex(w.collection)
+	err := CreateQueryIndex(w.logger, w.collection)
 	if err != nil {
 		return err
 	}
 
-	err = EnsureFtsIndex(w.cluster, w.bucket, w.scope.Name(), w.collection.Name())
+	err = EnsureFtsIndex(w.logger, w.cluster, w.bucket, w.scope.Name(), w.collection.Name())
 	if err != nil {
 		return err
 	}
@@ -134,9 +143,9 @@ func (w userProfile) Setup() error {
 	return nil
 }
 
-func CreateQueryIndex(collection *gocb.Collection) error {
+func CreateQueryIndex(logger *zap.Logger, collection *gocb.Collection) error {
 	indexName := "eMailIndex"
-	zap.L().Info("Creating query index", zap.String("name", indexName))
+	logger.Info("creating query index", zap.String("name", indexName))
 
 	mgr := collection.QueryIndexes()
 	err := mgr.CreateIndex(indexName, []string{"Email"}, &gocb.CreateQueryIndexOptions{
@@ -150,13 +159,13 @@ func CreateQueryIndex(collection *gocb.Collection) error {
 	return nil
 }
 
-func EnsureFtsIndex(cluster *gocb.Cluster, bucket, scope, collection string) error {
+func EnsureFtsIndex(logger *zap.Logger, cluster *gocb.Cluster, bucket, scope, collection string) error {
 	indexName := "interest-index"
 	mgr := cluster.SearchIndexes()
 
 	_, err := mgr.GetIndex(indexName, nil)
 	if err == nil {
-		zap.L().Info("Skipping fts index creation as already present", zap.String("name", indexName))
+		logger.Info("skipping fts index creation as already present", zap.String("name", indexName))
 		return nil
 	}
 
@@ -166,7 +175,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster, bucket, scope, collection string) err
 
 	indexScope := fmt.Sprintf("%s.%s", scope, collection)
 
-	zap.L().Info("Creating fts index", zap.String("name", indexName))
+	logger.Info("creating fts index", zap.String("name", indexName))
 	params := map[string]interface{}{
 		"doc_config": map[string]interface{}{
 			"mode":       "scope.collection.type_field",
@@ -201,7 +210,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster, bucket, scope, collection string) err
 		return err
 	}
 
-	zap.L().Info("Checking fts index is ready to use", zap.String("name", indexName))
+	logger.Info("Checking fts index is ready to use", zap.String("name", indexName))
 
 	end := time.Now().Add(time.Minute)
 	for time.Now().Before(end) {
@@ -217,7 +226,7 @@ func EnsureFtsIndex(cluster *gocb.Cluster, bucket, scope, collection string) err
 		}
 	}
 
-	return fmt.Errorf("timed out waiting for fts index to be ready: %s", err.Error())
+	return fmt.Errorf("timed out waiting for fts index to be ready: %w", err)
 }
 
 func (w userProfile) Functions() map[string]func(ctx context.Context, rctx workload.Runctx) error {
@@ -233,12 +242,12 @@ func (w userProfile) Functions() map[string]func(ctx context.Context, rctx workl
 // Fetch a random profile in the range of profiles
 func (w userProfile) fetchProfile(ctx context.Context, rctx workload.Runctx) error {
 	p := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems)))
+	w.logger.Debug("fetching profile", zap.String("id", p))
 	span := trace.SpanFromContext(ctx)
 	_, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("profile fetch failed: %s", err.Error())
 	}
-	rctx.Logger().Sugar().Debugf("fetching profile %s", p)
 	return nil
 }
 
@@ -246,6 +255,7 @@ func (w userProfile) fetchProfile(ctx context.Context, rctx workload.Runctx) err
 func (w userProfile) updateProfile(ctx context.Context, rctx workload.Runctx) error {
 	p := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems))) // Question to self, should I instead just grab this from context?  probably.
 	span := trace.SpanFromContext(ctx)
+	w.logger.Debug("getting profile to update", zap.String("id", p))
 	result, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("profile fetch during update failed: %s", err.Error())
@@ -259,6 +269,7 @@ func (w userProfile) updateProfile(ctx context.Context, rctx workload.Runctx) er
 
 	toUd.Status = gofakeit.Paragraph(1, rctx.Rand().Intn(8)+1, rctx.Rand().Intn(12)+1, "\n")
 
+	w.logger.Debug("upserting updated profile", zap.String("id", p))
 	_, uerr := w.collection.Upsert(p, toUd, &gocb.UpsertOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if uerr != nil {
 		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
@@ -270,6 +281,7 @@ func (w userProfile) updateProfile(ctx context.Context, rctx workload.Runctx) er
 func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) error {
 	p := fmt.Sprintf("u%d", rctx.Rand().Int31n(int32(w.numItems))) // Question to self, should I instead just grab this from context?  probably.
 	span := trace.SpanFromContext(ctx)
+	w.logger.Debug("getting profile to lock", zap.String("id", p))
 	result, err := w.collection.Get(p, &gocb.GetOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
 	if err != nil {
 		return fmt.Errorf("profile fetch during lock failed: %s", err.Error())
@@ -280,6 +292,7 @@ func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) erro
 
 	toUd.Enabled = false
 
+	w.logger.Debug("upserting locked profile", zap.String("id", p))
 	_, uerr := w.collection.Upsert(p, toUd, &gocb.UpsertOptions{Context: ctx, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)}) // replace with replace or subdoc
 	if uerr != nil {
 		return fmt.Errorf("data load upsert failed: %s", uerr.Error())
@@ -293,7 +306,7 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 	span := trace.SpanFromContext(ctx)
 
 	query := fmt.Sprintf("SELECT * FROM %s WHERE Email LIKE $email LIMIT 1", w.collection.Name())
-	rctx.Logger().Sugar().Debugf("Querying with %s using param %s", query, toFind)
+	w.logger.Debug("running findProfile query", zap.String("query", query))
 	params := make(map[string]interface{}, 1)
 	params["email"] = toFind
 
@@ -308,7 +321,6 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 		if err != nil {
 			return fmt.Errorf("could not read next row: %s", err.Error())
 		}
-		rctx.Logger().Sugar().Debugf("Found a User: %+v", resp.Profiles)
 	}
 
 	err = rows.Err()
@@ -322,7 +334,7 @@ func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runc
 	interestToFind := Interests[rand.Intn(len(Interests))]
 	span := trace.SpanFromContext(ctx)
 
-	rctx.Logger().Sugar().Debugf("Finding profiles that contain the interest %s", interestToFind)
+	w.logger.Debug("performing fts search for profiles with interest", zap.String("interest", interestToFind))
 
 	matchResult, err := w.cluster.SearchQuery(
 		"interest-index",
@@ -341,8 +353,6 @@ func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runc
 		row := matchResult.Row()
 		matchingUsers = append(matchingUsers, row.ID)
 	}
-
-	rctx.Logger().Sugar().Debugf("Found users interested in %s: %v\n", interestToFind, matchingUsers)
 
 	err = matchResult.Err()
 	if err != nil {
