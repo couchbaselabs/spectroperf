@@ -16,6 +16,7 @@ package main
 import (
 	"context"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 
 	"fmt"
@@ -226,15 +227,53 @@ func startSpectroperf() {
 	logger.Info("Setting up for workload", zap.String("workload", config.Workload))
 
 	// call the setup function on the workload.
-	workload.Setup(w, config.NumItems, bucket.Scope(config.Scope), collection)
+	workload.Setup(w, logger, config.NumItems, bucket.Scope(config.Scope), collection)
 
 	time.Sleep(5 * time.Second)
 
 	logger.Info("Running workload…\n")
-	workload.Run(w, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, sleep)
+	workload.Run(w, logger, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, sleep)
 
 	wg.Wait()
 
+	if !workload.PrometheusIsRunning() {
+		logger.Info("skipping writing metrics to file as prometheus is not running")
+		return
+	}
+
+	logger.Info("scraping operation metrics from prometheus to write to file")
+
+	// Add a minute onto the range to make sure none of the metrics are missed.
+	timeRange := config.RunTime + 1
+	metricSummaries := map[string]workload.OperationSummary{}
+	for _, op := range w.Operations() {
+		summary, err := workload.SummariseOperationMetrics(op, timeRange)
+		if err != nil {
+			logger.Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
+			continue
+		}
+
+		metricSummaries[op] = *summary
+	}
+
+	summaryOutput := map[string]any{}
+	summaryOutput["metricSummaries"] = metricSummaries
+	summaryOutput["steadyStateDurationMins"] = config.RunTime - (2 * config.RampTime)
+
+	timeStamp := time.Now().UTC().Format("2006-01-02-15:04")
+	if err := os.Mkdir(timeStamp, 0755); err != nil {
+		logger.Fatal("creating directory for spectroperf artefacts", zap.Error(err))
+	}
+
+	bytes, err := json.Marshal(summaryOutput)
+	if err != nil {
+		logger.Fatal("marshalling metric summary", zap.Error(err), zap.Any("summary", summaryOutput))
+	}
+
+	filePath := fmt.Sprintf("%s/metrics.json", timeStamp)
+	if err := os.WriteFile(filePath, bytes, 0644); err != nil {
+		logger.Fatal("writing metric summary to file", zap.Error(err), zap.String("path", filePath))
+	}
 }
 
 // validateMarkov chain checks that the markov chain from the config file
