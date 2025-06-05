@@ -2,7 +2,6 @@ package workload
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"log/slog"
 	"math/rand"

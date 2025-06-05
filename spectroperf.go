@@ -194,7 +194,7 @@ func startSpectroperf() {
 	case "user-profile-dapi":
 		w = workloads.NewUserProfileDapi(logger, config, collection, cluster)
 	case "basic-dapi":
-		w = workloads.NewBasicDapi(config, collection, cluster)
+		w = workloads.NewBasicDapi(logger, config, collection, cluster)
 	default:
 		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}

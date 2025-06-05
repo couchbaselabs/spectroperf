@@ -24,6 +24,7 @@ import (
 
 type basicDapi struct {
 	connstr    string
+	logger     *zap.Logger
 	username   string
 	password   string
 	client     *http.Client
@@ -39,7 +40,11 @@ type Doc struct {
 	RandString string
 }
 
-func NewBasicDapi(config configuration.Config, collection *gocb.Collection, cluster *gocb.Cluster) basicDapi {
+func NewBasicDapi(
+	logger *zap.Logger,
+	config *configuration.Config,
+	collection *gocb.Collection,
+	cluster *gocb.Cluster) basicDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
 			MaxConnsPerHost:     500,
@@ -56,6 +61,7 @@ func NewBasicDapi(config configuration.Config, collection *gocb.Collection, clus
 
 	return basicDapi{
 		connstr:    config.DapiConnstr,
+		logger:     logger,
 		username:   config.Username,
 		password:   config.Password,
 		client:     &http.Client{Transport: tr},
@@ -113,12 +119,12 @@ func (w basicDapi) GenerateDocument(id int) workload.DocType {
 func (w basicDapi) Setup() error {
 	gofakeit.Seed(int64(workload.RandSeed))
 
-	err := CreateBasicQueryIndex(w.collection)
+	err := CreateBasicQueryIndex(w.logger, w.collection)
 	if err != nil {
 		return err
 	}
 
-	err = EnsureBasicFtsIndex(w.cluster)
+	err = EnsureBasicFtsIndex(w.logger, w.cluster)
 	if err != nil {
 		return err
 	}
@@ -297,9 +303,9 @@ func (w basicDapi) fullTextSearch(ctx context.Context, rctx workload.Runctx) err
 	return nil
 }
 
-func CreateBasicQueryIndex(collection *gocb.Collection) error {
+func CreateBasicQueryIndex(logger *zap.Logger, collection *gocb.Collection) error {
 	indexName := "basicIndex"
-	zap.L().Info("Creating query index", zap.String("name", indexName))
+	logger.Info("Creating query index", zap.String("name", indexName))
 
 	mgr := collection.QueryIndexes()
 	err := mgr.CreateIndex(indexName, []string{"id"}, &gocb.CreateQueryIndexOptions{
@@ -313,13 +319,13 @@ func CreateBasicQueryIndex(collection *gocb.Collection) error {
 	return nil
 }
 
-func EnsureBasicFtsIndex(cluster *gocb.Cluster) error {
+func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
 	indexName := "rand-string-index"
 	mgr := cluster.SearchIndexes()
 
 	_, err := mgr.GetIndex(indexName, nil)
 	if err == nil {
-		zap.L().Info("Skipping fts index creation as already present", zap.String("name", indexName))
+		logger.Info("Skipping fts index creation as already present", zap.String("name", indexName))
 		return nil
 	}
 
@@ -327,7 +333,7 @@ func EnsureBasicFtsIndex(cluster *gocb.Cluster) error {
 		return fmt.Errorf("failed to check if fts index is already pressent: %w", err)
 	}
 
-	zap.L().Info("Creating fts index", zap.String("name", indexName))
+	logger.Info("Creating fts index", zap.String("name", indexName))
 	params := map[string]interface{}{
 		"doc_config": map[string]interface{}{
 			"mode":       "scope.collection.type_field",
@@ -378,7 +384,7 @@ func EnsureBasicFtsIndex(cluster *gocb.Cluster) error {
 		return err
 	}
 
-	zap.L().Info("Checking fts index is ready to use", zap.String("name", indexName))
+	logger.Info("Checking fts index is ready to use", zap.String("name", indexName))
 
 	var finalError error
 	end := time.Now().Add(time.Minute)
@@ -389,7 +395,7 @@ func EnsureBasicFtsIndex(cluster *gocb.Cluster) error {
 		}
 
 		finalError = err
-		zap.L().Info("Waiting for documents to be indexed ", zap.String("name", indexName))
+		logger.Info("Waiting for documents to be indexed ", zap.String("name", indexName))
 		time.Sleep(time.Second * 10)
 	}
 
