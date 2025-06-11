@@ -100,23 +100,16 @@ func TotalOperationsFailed(op string, timeRange int) (int, error) {
 	return int(math.Round(total)), nil
 }
 
-// NinetyNithPercentileLatency returns the 99th percentile latency for the given
+// LatencyPercentile returns the given percentile latency for the chosen
 // operation in milliseconds, in the given time range.
-func NinetyNithPercentileLatency(op string, timeRange int) (float64, error) {
-	query := fmt.Sprintf(
-		`histogram_quantile(0.99, sum(rate(%s_bucket{operation="%s",phase="Steady"}[%dm])) by (le))`,
-		OperationDurationMillisMetric,
-		op,
-		timeRange)
+func LatencyPercentile(op string, timeRange int, percentile int) (float64, error) {
+	if percentile < 1 || percentile > 99 {
+		return 0, errors.New("percentile must be between 1 and 99 inclusive")
+	}
 
-	return processQuery(query, op)
-}
-
-// FiftiethPercentileLatency returns the 50th percentile latency for the given
-// operation in milliseconds, in the given time range.
-func FiftiethPercentileLatency(op string, timeRange int) (float64, error) {
 	query := fmt.Sprintf(
-		`histogram_quantile(0.50, sum(rate(%s_bucket{operation="%s",phase="Steady"}[%dm])) by (le))`,
+		`histogram_quantile(%.2f, sum(rate(%s_bucket{operation="%s",phase="Steady"}[%dm])) by (le))`,
+		float64(percentile)/100,
 		OperationDurationMillisMetric,
 		op,
 		timeRange)
@@ -125,8 +118,10 @@ func FiftiethPercentileLatency(op string, timeRange int) (float64, error) {
 }
 
 type LatencyPercentiles struct {
-	NinetyNinth float64 `json:"ninetyNinth"`
-	Fiftieth    float64 `json:"fiftieth"`
+	NinetyNinth  float64 `json:"ninetyNinth"`
+	NinetyEighth float64 `json:"ninetyEighth"`
+	NinetyFifth  float64 `json:"ninetyFifth"`
+	Fiftieth     float64 `json:"fiftieth"`
 }
 
 // OperationSummary summarises the metrics for a whole spectroperf run for a
@@ -152,12 +147,22 @@ func SummariseOperationMetrics(op string, timeRange int) (*OperationSummary, err
 		return nil, err
 	}
 
-	ninetyNinth, err := NinetyNithPercentileLatency(op, timeRange)
+	ninetyNinth, err := LatencyPercentile(op, timeRange, 99)
 	if err != nil {
 		return nil, err
 	}
 
-	fiftieth, err := FiftiethPercentileLatency(op, timeRange)
+	ninetyEighth, err := LatencyPercentile(op, timeRange, 98)
+	if err != nil {
+		return nil, err
+	}
+
+	ninetyFifth, err := LatencyPercentile(op, timeRange, 95)
+	if err != nil {
+		return nil, err
+	}
+
+	fiftieth, err := LatencyPercentile(op, timeRange, 50)
 	if err != nil {
 		return nil, err
 	}
@@ -166,8 +171,10 @@ func SummariseOperationMetrics(op string, timeRange int) (*OperationSummary, err
 		Total:  total,
 		Failed: totalFailed,
 		Latencies: LatencyPercentiles{
-			NinetyNinth: ninetyNinth,
-			Fiftieth:    fiftieth,
+			NinetyNinth:  ninetyNinth,
+			NinetyEighth: ninetyEighth,
+			NinetyFifth:  ninetyFifth,
+			Fiftieth:     fiftieth,
 		},
 	}
 	return &summary, nil
