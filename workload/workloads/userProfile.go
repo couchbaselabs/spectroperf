@@ -300,6 +300,14 @@ func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) erro
 	return nil
 }
 
+type NoRetyStrategy struct {
+}
+
+// RetryAfter calculates and returns a RetryAction describing how long to wait before retrying an operation.
+func (rs *NoRetyStrategy) RetryAfter(req gocb.RetryRequest, reason gocb.RetryReason) gocb.RetryAction {
+	return &gocb.NoRetryRetryAction{}
+}
+
 // Find a profile using a n1ql query on the email field
 func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
@@ -310,7 +318,14 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 	params := make(map[string]interface{}, 1)
 	params["email"] = toFind
 
-	rows, err := w.scope.Query(query, &gocb.QueryOptions{NamedParameters: params, Adhoc: true, ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span)})
+	rows, err := w.scope.Query(
+		query,
+		&gocb.QueryOptions{
+			NamedParameters: params,
+			Adhoc:           true,
+			ParentSpan:      gotel.NewOpenTelemetryRequestSpan(ctx, span),
+			RetryStrategy:   &NoRetyStrategy{},
+		})
 	if err != nil {
 		return fmt.Errorf("query failed: %s", err.Error())
 	}
