@@ -1,8 +1,10 @@
 package workload
 
 import (
-	"go.uber.org/zap"
 	"math/rand"
+
+	"github.com/couchbase/gocb/v2"
+	"go.uber.org/zap"
 )
 
 var RandSeed = 11211
@@ -23,4 +25,11 @@ func (r Runctx) Rand() *rand.Rand {
 
 func (r Runctx) Logger() *zap.Logger {
 	return &r.l
+}
+
+type NoRetyStrategy struct {
+}
+
+func (rs *NoRetyStrategy) RetryAfter(req gocb.RetryRequest, reason gocb.RetryReason) gocb.RetryAction {
+	return &gocb.NoRetryRetryAction{}
 }
