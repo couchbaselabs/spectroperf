@@ -201,14 +201,14 @@ The dashboard is split into three sections `ramp-up`, `steady` and `ramp-down`.
 The `ramp-up` phase is the first minute of the workload, and the `ramp-down` is the last minute while `steady` is the time in the middle. 
 Feel free to edit the dashboard to perform the analysis required, this definition was just given as a starting point. 
 
-## Artefacts
+## Artifacts
 
 Spectroperf will produces artefacts summarising a run.
 These will be put in a directory named with a formatted timestamp, e.g: `2025-06-12-07:23`
 
 ### metrics.json
 
-If prometheus is running as configured using `prometheus.yml` then spectroperf will scrape a summary of the metrics and output them to a file.
+If prometheus is running as configured using `prometheus.yml` then spectroperf will scrape a summary of the metrics and output them to a file when the run finishes.
 For example: 
 
 ```
