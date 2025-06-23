@@ -43,7 +43,6 @@ type Doc struct {
 func NewBasicDapi(
 	logger *zap.Logger,
 	config *configuration.Config,
-	collection *gocb.Collection,
 	cluster *gocb.Cluster) basicDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
@@ -59,6 +58,8 @@ func NewBasicDapi(
 		}),
 	)
 
+	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
+
 	return basicDapi{
 		connstr:    config.DapiConnstr,
 		logger:     logger,
@@ -68,7 +69,7 @@ func NewBasicDapi(
 		numItems:   config.NumItems,
 		bucket:     config.Bucket,
 		scope:      config.Scope,
-		collection: collection,
+		collection: scope.Collection(config.Collection),
 		cluster:    cluster,
 	}
 }

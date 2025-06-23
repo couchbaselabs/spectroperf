@@ -180,7 +180,6 @@ func startSpectroperf() {
 	}
 
 	bucket := cluster.Bucket(config.Bucket)
-	collection := bucket.Scope(config.Scope).Collection(config.Collection)
 
 	err = bucket.WaitUntilReady(5*time.Second, nil)
 	if err != nil {
@@ -190,11 +189,13 @@ func startSpectroperf() {
 	var w workload.Workload
 	switch config.Workload {
 	case "user-profile":
-		w = workloads.NewUserProfile(logger, bucket.Name(), config.NumItems, bucket.Scope(config.Scope), collection, cluster)
+		w = workloads.NewUserProfile(logger, config, cluster)
 	case "user-profile-dapi":
-		w = workloads.NewUserProfileDapi(logger, config, collection, cluster)
+		w = workloads.NewUserProfileDapi(logger, config, cluster)
 	case "basic-dapi":
-		w = workloads.NewBasicDapi(logger, config, collection, cluster)
+		w = workloads.NewBasicDapi(logger, config, cluster)
+	case "basic":
+		w = workloads.NewBasic(logger, config, cluster)
 	default:
 		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload))
 	}
@@ -222,18 +223,17 @@ func startSpectroperf() {
 		logger.Info("neither markov chain or only operation specified, using built in workload proabilities")
 		markovChain = w.Probabilities()
 	}
+	config.MarkovChain = markovChain
 
 	workload.InitMetrics(w)
 
 	logger.Info("Setting up for workload", zap.String("workload", config.Workload))
 
 	// call the setup function on the workload.
-	workload.Setup(w, logger, config.NumItems, bucket.Scope(config.Scope), collection)
+	collection := bucket.Scope(config.Scope).Collection(config.Collection)
+	workload.Setup(w, logger, config.NumItems, collection)
 
-	time.Sleep(5 * time.Second)
-
-	logger.Info("Running workload…\n")
-	workload.Run(w, logger, markovChain, config.NumUsers, time.Duration(config.RunTime)*time.Minute, time.Duration(config.RampTime)*time.Minute, tracer, sleep)
+	workload.Run(w, logger, config, tracer, sleep)
 
 	wg.Wait()
 
