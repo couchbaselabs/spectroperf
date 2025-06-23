@@ -93,6 +93,9 @@ func Setup(w Workload, logger *zap.Logger, numItemsArg int, scp *gocb.Scope, col
 	for i := 0; i < numItemsArg; i++ {
 		workChan <- w.GenerateDocument(i)
 	}
+	close(workChan)
+
+	wg.Wait()
 
 	close(workChan)
 	wg.Wait()
