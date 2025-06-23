@@ -152,11 +152,14 @@ func CreateQueryIndex(logger *zap.Logger, collection *gocb.Collection) error {
 		IgnoreIfExists: true,
 	})
 
-	if err != nil {
-		return errors.Wrap(err, "failed to create eMailIndex")
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, gocb.ErrAmbiguousTimeout):
+		return workload.WaitForIndexToBuild(mgr, logger, indexName)
+	default:
+		return errors.Wrap(err, fmt.Sprintf("failed to create %s", indexName))
 	}
-
-	return nil
 }
 
 func EnsureFtsIndex(logger *zap.Logger, cluster *gocb.Cluster, bucket, scope, collection string) error {

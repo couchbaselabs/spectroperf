@@ -312,11 +312,14 @@ func CreateBasicQueryIndex(logger *zap.Logger, collection *gocb.Collection) erro
 		IgnoreIfExists: true,
 	})
 
-	if err != nil {
-		return errors.Wrap(err, "failed to create basicIndex")
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, gocb.ErrAmbiguousTimeout):
+		return workload.WaitForIndexToBuild(mgr, logger, indexName)
+	default:
+		return errors.Wrap(err, fmt.Sprintf("failed to create %s", indexName))
 	}
-
-	return nil
 }
 
 func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
