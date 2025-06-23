@@ -11,6 +11,7 @@ import (
 	gotel "github.com/couchbase/gocb-opentelemetry"
 	"github.com/couchbase/gocb/v2"
 	"github.com/couchbase/gocb/v2/search"
+	"github.com/couchbaselabs/spectroperf/configuration"
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
@@ -26,20 +27,15 @@ type userProfile struct {
 	cluster    *gocb.Cluster
 }
 
-func NewUserProfile(
-	logger *zap.Logger,
-	bucket string,
-	numItems int,
-	scope *gocb.Scope,
-	collection *gocb.Collection,
-	cluster *gocb.Cluster) userProfile {
+func NewUserProfile(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) userProfile {
+	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
 
 	return userProfile{
 		logger:     logger,
-		numItems:   numItems,
-		bucket:     bucket,
+		numItems:   config.NumItems,
+		bucket:     config.Bucket,
 		scope:      scope,
-		collection: collection,
+		collection: scope.Collection(config.Collection),
 		cluster:    cluster,
 	}
 }
