@@ -38,7 +38,6 @@ type userProfileDapi struct {
 func NewUserProfileDapi(
 	logger *zap.Logger,
 	config *configuration.Config,
-	collection *gocb.Collection,
 	cluster *gocb.Cluster) userProfileDapi {
 	tr := otelhttp.NewTransport(
 		&http.Transport{
@@ -56,6 +55,8 @@ func NewUserProfileDapi(
 		}),
 	)
 
+	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
+
 	return userProfileDapi{
 		logger:     logger,
 		connstr:    config.DapiConnstr,
@@ -65,7 +66,7 @@ func NewUserProfileDapi(
 		numItems:   config.NumItems,
 		bucket:     config.Bucket,
 		scope:      config.Scope,
-		collection: collection,
+		collection: scope.Collection(config.Collection),
 		cluster:    cluster,
 	}
 }
