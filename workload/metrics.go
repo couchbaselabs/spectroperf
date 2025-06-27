@@ -206,10 +206,30 @@ func executeQuery(query string) (*queryResult, error) {
 	}
 
 	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	hc := http.Client{}
-	resp, err := hc.Do(req)
+
+	hc := http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	var resp *http.Response
+	maxRetries := 3
+	for i := 0; i < maxRetries; i++ {
+		resp, err = hc.Do(req)
+		if err == nil {
+			break
+		}
+		if i < maxRetries-1 {
+			time.Sleep(time.Duration(i+1) * time.Second)
+		}
+	}
+	
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, fmt.Errorf("prometheus returned status: %d", resp.StatusCode)
 	}
 
 	bodyText, err := io.ReadAll(resp.Body)
