@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptrace"
-	"strings"
 	"time"
 
 	"github.com/brianvoe/gofakeit"
@@ -303,7 +302,8 @@ func (w basicDapi) fullTextSearch(ctx context.Context, rctx workload.Runctx) err
 
 func CreateBasicQueryIndex(logger *zap.Logger, collection *gocb.Collection) error {
 	indexName := "basicIndex"
-	logger.Info("Creating query index", zap.String("name", indexName))
+
+	logger.Info("creating query index", zap.String("name", indexName))
 
 	mgr := collection.QueryIndexes()
 	err := mgr.CreateIndex(indexName, []string{"id"}, &gocb.CreateQueryIndexOptions{
@@ -312,12 +312,15 @@ func CreateBasicQueryIndex(logger *zap.Logger, collection *gocb.Collection) erro
 
 	switch {
 	case err == nil:
-		return nil
 	case errors.Is(err, gocb.ErrAmbiguousTimeout):
 		return workload.WaitForIndexToBuild(mgr, logger, indexName)
+	case errors.Is(err, gocb.ErrServiceNotAvailable):
+		logger.Warn("query service not available on cluster, any query operations will fail")
 	default:
 		return errors.Wrap(err, fmt.Sprintf("failed to create %s", indexName))
 	}
+
+	return nil
 }
 
 func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
@@ -325,16 +328,20 @@ func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
 	mgr := cluster.SearchIndexes()
 
 	_, err := mgr.GetIndex(indexName, nil)
-	if err == nil {
-		logger.Info("Skipping fts index creation as already present", zap.String("name", indexName))
+	switch {
+	case err == nil:
+		logger.Info("skipping fts index creation as already present", zap.String("name", indexName))
 		return nil
+	case errors.Is(err, gocb.ErrIndexNotFound):
+	case errors.Is(err, gocb.ErrServiceNotAvailable):
+		logger.Warn("search service not available on cluster, any fts operations will fail")
+		return nil
+	default:
+		return err
 	}
 
-	if !strings.Contains(err.Error(), "index not found") {
-		return fmt.Errorf("failed to check if fts index is already pressent: %w", err)
-	}
+	logger.Info("creating fts index", zap.String("name", indexName))
 
-	logger.Info("Creating fts index", zap.String("name", indexName))
 	params := map[string]interface{}{
 		"doc_config": map[string]interface{}{
 			"mode":       "scope.collection.type_field",
@@ -385,7 +392,7 @@ func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
 		return err
 	}
 
-	logger.Info("Checking fts index is ready to use", zap.String("name", indexName))
+	logger.Info("checking fts index is ready to use", zap.String("name", indexName))
 
 	var finalError error
 	end := time.Now().Add(time.Minute)
@@ -396,7 +403,7 @@ func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
 		}
 
 		finalError = err
-		logger.Info("Waiting for documents to be indexed ", zap.String("name", indexName))
+		logger.Info("waiting for documents to be indexed ", zap.String("name", indexName))
 		time.Sleep(time.Second * 10)
 	}
 
