@@ -55,11 +55,11 @@ func init() {
 	configFlags := pflag.NewFlagSet("", pflag.ContinueOnError)
 	configFlags.String("connstr", "", "connection string of the cluster under test")
 	configFlags.String("dapi-connstr", "", "connection string for data api")
-	configFlags.String("username", "Administrator", "username for cluster under test")
-	configFlags.String("password", "password", "password of the cluster under test")
+	configFlags.String("username", configuration.DefaultUsername, "username for cluster under test")
+	configFlags.String("password", configuration.DefaultPassword, "password of the cluster under test")
 	configFlags.String("cert", "", "path to certificate file")
 	configFlags.Bool("tls-skip-verify", false, "skip tls certificate verification")
-	configFlags.String("log-level", "info", "the log level to run at")
+	configFlags.String("log-level", configuration.DefaultLogLevel, "the log level to run at")
 	configFlags.String("workload", "", "workload name")
 	configFlags.Int("num-items", 500, "number of docs to create")
 	configFlags.Int("num-users", 500, "number of concurrent simulated users accessing the data")
@@ -67,23 +67,27 @@ func init() {
 	configFlags.Int("ramp-time", 0, "length of ramp-up and ramp-down periods in minutes")
 	configFlags.String("only-operation", "", "the only operation to run from the workload")
 	configFlags.String("sleep", "", "time to sleep between operations")
-	configFlags.String("bucket", "data", "bucket name")
-	configFlags.String("scope", "identity", "scope name")
-	configFlags.String("collection", "profiles", "collection name")
+	configFlags.String("bucket", configuration.DefaultBucket, "bucket name")
+	configFlags.String("scope", configuration.DefaultScope, "scope name")
+	configFlags.String("collection", configuration.DefaultCollection, "collection name")
 	configFlags.Bool("enable-tracing", false, "enables otel tracing")
-	configFlags.String("otlp-endpoint", workload.DefaultOtlpEndpoint, "endpoint otel traces will be exported to")
+	configFlags.String("otlp-endpoint", configuration.DefaultOtlpEndpoint, "endpoint otel traces will be exported to")
 	configFlags.String("otel-exporter-headers", "", "a comma seperated list of otel expoter headers, e.g 'header1=value1,header2=value2'")
 	rootCmd.Flags().AddFlagSet(configFlags)
 
 	_ = viper.BindPFlags(configFlags)
 }
 
-func getLogger() (zap.AtomicLevel, *zap.Logger) {
+func getLogger(startTime string) (zap.AtomicLevel, *zap.Logger) {
 	logLevel := zap.NewAtomicLevel()
 	logConfig := zap.NewProductionEncoderConfig()
 	logConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	jsonEncoder := zapcore.NewJSONEncoder(logConfig)
+	filePath := fmt.Sprintf("%s/spectroperf.log", startTime)
+	logFile, _ := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	writer := zapcore.AddSync(logFile)
 	core := zapcore.NewTee(
+		zapcore.NewCore(jsonEncoder, writer, logLevel),
 		zapcore.NewCore(jsonEncoder, zapcore.AddSync(os.Stdout), logLevel),
 	)
 	logger := zap.New(core, zap.AddCaller(), zap.AddStacktrace(zapcore.ErrorLevel))
@@ -93,8 +97,13 @@ func getLogger() (zap.AtomicLevel, *zap.Logger) {
 
 func startSpectroperf() {
 	// initialize the logger
-	logLevel, logger := getLogger()
+	startTime := time.Now().UTC().Format("2006-01-02-15:04")
+	if err := os.Mkdir(startTime, 0755); err != nil {
+		fmt.Printf("creating directory for spectroperf artefacts", zap.Error(err))
+		return
+	}
 
+	logLevel, logger := getLogger(startTime)
 	logger.Info("parsed launch configuration", zap.String("config", cfgFile))
 
 	if cfgFile != "" {
@@ -132,7 +141,7 @@ func startSpectroperf() {
 	}
 
 	if !config.EnableTracing {
-		if config.OtlpEndpoint != workload.DefaultOtlpEndpoint {
+		if config.OtlpEndpoint != configuration.DefaultOtlpEndpoint {
 			logger.Fatal("Otlp endpoint provided but tracing disabled")
 		}
 
@@ -237,6 +246,12 @@ func startSpectroperf() {
 
 	wg.Wait()
 
+	if err := configuration.WriteConfig(config, startTime, w.Probabilities()); err != nil {
+		logger.Fatal("writing config to file", zap.Error(err))
+	}
+
+	logger.Info("successfully written config file")
+
 	if !workload.PrometheusIsRunning() {
 		logger.Info("skipping writing metrics to file as prometheus is not running")
 		return
@@ -261,17 +276,12 @@ func startSpectroperf() {
 	summaryOutput["metricSummaries"] = metricSummaries
 	summaryOutput["steadyStateDurationMins"] = config.RunTime - (2 * config.RampTime)
 
-	timeStamp := time.Now().UTC().Format("2006-01-02-15:04")
-	if err := os.Mkdir(timeStamp, 0755); err != nil {
-		logger.Fatal("creating directory for spectroperf artefacts", zap.Error(err))
-	}
-
 	bytes, err := json.Marshal(summaryOutput)
 	if err != nil {
 		logger.Fatal("marshalling metric summary", zap.Error(err), zap.Any("summary", summaryOutput))
 	}
 
-	filePath := fmt.Sprintf("%s/metrics.json", timeStamp)
+	filePath := fmt.Sprintf("%s/metrics.json", startTime)
 	if err := os.WriteFile(filePath, bytes, 0644); err != nil {
 		logger.Fatal("writing metric summary to file", zap.Error(err), zap.String("path", filePath))
 	}

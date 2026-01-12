@@ -1,37 +1,55 @@
 package configuration
 
 import (
+	"fmt"
+	"os"
+	"slices"
+
+	"github.com/BurntSushi/toml"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
+const (
+	DefaultUsername = "Administrator"
+	DefaultPassword = "password"
+
+	DefaultLogLevel = "info"
+
+	DefaultBucket     = "data"
+	DefaultScope      = "identity"
+	DefaultCollection = "profiles"
+
+	DefaultOtlpEndpoint = "localhost:4318"
+)
+
 // Config represents all the configuration settings for spectroperf.
 type Config struct {
-	Connstr       string
-	DapiConnstr   string
-	Username      string
-	Password      string
-	Cert          string
-	TlsSkipVerify bool
-	LogLevel      string
+	Connstr       string `toml:"connstr,omitempty"`
+	DapiConnstr   string `toml:"dapi-connstr,omitempty"`
+	Username      string `toml:"username,omitempty"`
+	Password      string `toml:"password,omitempty"`
+	Cert          string `toml:"cert,omitempty"`
+	TlsSkipVerify bool   `toml:"tls-skip-verify,omitempty"`
+	LogLevel      string `toml:"log-level,omitempty"`
 
-	Bucket     string
-	Scope      string
-	Collection string
-	NumItems   int
-	NumUsers   int
-	ConfigFile string
+	Bucket     string `toml:"bucket,omitempty"`
+	Scope      string `toml:"scope,omitempty"`
+	Collection string `toml:"collection,omitempty"`
+	NumItems   int    `toml:"num-items,omitempty"`
+	NumUsers   int    `toml:"num-users,omitempty"`
+	ConfigFile string `toml:"config-file,omitempty"`
 
-	Workload string
+	Workload string `toml:"workload"`
 
-	RunTime             int
-	RampTime            int
-	OtlpEndpoint        string
-	EnableTracing       bool
-	OtelExporterHeaders string
-	MarkovChain         [][]float64
-	OnlyOperation       string
-	Sleep               string
+	RunTime             int         `toml:"run-time,omitempty"`
+	RampTime            int         `toml:"ramp-time,omitempty"`
+	OtlpEndpoint        string      `toml:"otlp-endpoint,omitempty"`
+	EnableTracing       bool        `toml:"enable-tracing,omitempty"`
+	OtelExporterHeaders string      `toml:"otel-exported-headers,omitempty"`
+	MarkovChain         [][]float64 `toml:"markov-chain"`
+	OnlyOperation       string      `toml:"only-operation,omitempty"`
+	Sleep               string      `toml:"sleep,omitempty"`
 }
 
 func ReadConfig(logger *zap.Logger) *Config {
@@ -68,4 +86,60 @@ func ReadConfig(logger *zap.Logger) *Config {
 	logger.Info("parsed configuration", zap.Any("config", config))
 
 	return config
+}
+
+func WriteConfig(config *Config, timeStamp string, defaultMarkov [][]float64) error {
+	filePath := fmt.Sprintf("%s/config.toml", timeStamp)
+
+	f, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	encoder := toml.NewEncoder(f)
+
+	clearDefaults(config, defaultMarkov)
+	return encoder.Encode(config)
+}
+
+func clearDefaults(config *Config, defaultMarkov [][]float64) {
+	if config.Username == DefaultUsername {
+		config.Username = ""
+	}
+
+	if config.Password == DefaultPassword {
+		config.Password = ""
+	}
+
+	if config.LogLevel == DefaultLogLevel {
+		config.LogLevel = ""
+	}
+
+	if config.Bucket == DefaultBucket {
+		config.Bucket = ""
+	}
+
+	if config.Scope == DefaultScope {
+		config.Scope = ""
+	}
+
+	if config.Collection == DefaultCollection {
+		config.Collection = ""
+	}
+
+	if config.OtlpEndpoint == DefaultOtlpEndpoint {
+		config.OtlpEndpoint = ""
+	}
+
+	markovChainDefault := true
+	for i, row := range config.MarkovChain {
+		if !slices.Equal(row, defaultMarkov[i]) {
+			markovChainDefault = false
+		}
+	}
+
+	if markovChainDefault {
+		config.MarkovChain = nil
+	}
 }
