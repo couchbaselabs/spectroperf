@@ -284,7 +284,7 @@ func (w userProfileDapi) lockProfile(ctx context.Context, rctx workload.Runctx) 
 
 	jsonBytes, err := json.Marshal(toUd)
 	if err != nil {
-		return fmt.Errorf("could not marshal User to json: &s", err.Error())
+		return fmt.Errorf("could not marshal User to json: %s", err.Error())
 	}
 
 	req, err = http.NewRequestWithContext(ctx, "PUT", requestURL, bytes.NewBuffer(jsonBytes))
@@ -318,7 +318,7 @@ type DapiUserQueryResponse struct {
 
 func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
-	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE Email LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection.Name(), toFind)
+	query := fmt.Sprintf("SELECT * FROM `%s`.`%s`.`%s` WHERE Email LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection.Name(), toFind)
 	payload := DapiQueryPayload{
 		Statement: query,
 	}
