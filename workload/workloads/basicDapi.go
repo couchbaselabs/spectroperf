@@ -181,7 +181,7 @@ func (w basicDapi) set(ctx context.Context, rctx workload.Runctx) error {
 	newDoc := w.GenerateDocument(int(id))
 	jsonBytes, err := json.Marshal(newDoc.Data)
 	if err != nil {
-		return fmt.Errorf("could not marshal newDoc to json: &s", err.Error())
+		return fmt.Errorf("could not marshal newDoc to json: %s", err.Error())
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "PUT", requestURL, bytes.NewBuffer(jsonBytes))
@@ -214,7 +214,7 @@ type BasicQueryResponse struct {
 
 func (w basicDapi) query(ctx context.Context, rctx workload.Runctx) error {
 	toFind := fmt.Sprintf("%s%%", gofakeit.Letter())
-	query := fmt.Sprintf("SELECT * FROM %s.%s.%s WHERE RandString LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection.Name(), toFind)
+	query := fmt.Sprintf("SELECT * FROM `%s`.`%s`.`%s` WHERE RandString LIKE '%s' LIMIT 1", w.bucket, w.scope, w.collection.Name(), toFind)
 	payload := DapiQueryPayload{
 		Statement: query,
 	}
