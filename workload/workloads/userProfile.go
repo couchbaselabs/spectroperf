@@ -150,12 +150,15 @@ func CreateQueryIndex(logger *zap.Logger, collection *gocb.Collection) error {
 
 	switch {
 	case err == nil:
-		return nil
 	case errors.Is(err, gocb.ErrAmbiguousTimeout):
 		return workload.WaitForIndexToBuild(mgr, logger, indexName)
+	case errors.Is(err, gocb.ErrServiceNotAvailable):
+		logger.Warn("query service not available on cluster, any query operations will fail")
 	default:
 		return errors.Wrap(err, fmt.Sprintf("failed to create %s", indexName))
 	}
+
+	return nil
 }
 
 func EnsureFtsIndex(logger *zap.Logger, cluster *gocb.Cluster, bucket, scope, collection string) error {
@@ -163,12 +166,15 @@ func EnsureFtsIndex(logger *zap.Logger, cluster *gocb.Cluster, bucket, scope, co
 	mgr := cluster.SearchIndexes()
 
 	_, err := mgr.GetIndex(indexName, nil)
-	if err == nil {
-		logger.Info("skipping fts index creation as already present", zap.String("name", indexName))
+	switch {
+	case err == nil:
+		logger.Info("Skipping fts index creation as already present", zap.String("name", indexName))
 		return nil
-	}
-
-	if !strings.Contains(err.Error(), "index not found") {
+	case errors.Is(err, gocb.ErrIndexNotFound):
+	case errors.Is(err, gocb.ErrServiceNotAvailable):
+		logger.Warn("search service not available on cluster, any fts operations will fail")
+		return nil
+	default:
 		return err
 	}
 
@@ -209,7 +215,7 @@ func EnsureFtsIndex(logger *zap.Logger, cluster *gocb.Cluster, bucket, scope, co
 		return err
 	}
 
-	logger.Info("Checking fts index is ready to use", zap.String("name", indexName))
+	logger.Info("checking fts index is ready to use", zap.String("name", indexName))
 
 	end := time.Now().Add(time.Minute)
 	for time.Now().Before(end) {
