@@ -138,6 +138,8 @@ func (w basicDapi) executeRequest(req *http.Request) (*http.Response, error) {
 	}
 
 	if resp.StatusCode != 200 {
+		io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
 		return nil, fmt.Errorf("profile fetch returned unexpected status code %d", resp.StatusCode)
 	}
 	return resp, nil
