@@ -3,13 +3,11 @@ package workloads
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
-	"net/http/httptrace"
 	"strings"
 	"time"
 
@@ -17,8 +15,6 @@ import (
 	"github.com/couchbase/gocb/v2"
 	"github.com/couchbaselabs/spectroperf/configuration"
 	"github.com/couchbaselabs/spectroperf/workload"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/httptrace/otelhttptrace"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/zap"
 )
 
@@ -36,22 +32,6 @@ type userProfileDapi struct {
 }
 
 func NewUserProfileDapi(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) userProfileDapi {
-	tr := otelhttp.NewTransport(
-		&http.Transport{
-			MaxConnsPerHost:     500,
-			MaxIdleConnsPerHost: 100,
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: config.TlsSkipVerify,
-			},
-		},
-		// By setting the otelhttptrace client in this transport, it can be
-		// injected into the context after the span is started, which makes the
-		// httptrace spans children of the transport one.
-		otelhttp.WithClientTrace(func(ctx context.Context) *httptrace.ClientTrace {
-			return otelhttptrace.NewClientTrace(ctx)
-		}),
-	)
-
 	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
 
 	return userProfileDapi{
@@ -59,7 +39,7 @@ func NewUserProfileDapi(logger *zap.Logger, config *configuration.Config, cluste
 		connstr:    config.DapiConnstr,
 		username:   config.Username,
 		password:   config.Password,
-		client:     &http.Client{Transport: tr},
+		client:     newDapiHTTPClient(config),
 		numItems:   config.NumItems,
 		bucket:     config.Bucket,
 		scope:      config.Scope,

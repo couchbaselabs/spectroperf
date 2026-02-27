@@ -73,6 +73,10 @@ func init() {
 	configFlags.Bool("enable-tracing", false, "enables otel tracing")
 	configFlags.String("otlp-endpoint", configuration.DefaultOtlpEndpoint, "endpoint otel traces will be exported to")
 	configFlags.String("otel-exporter-headers", "", "a comma seperated list of otel expoter headers, e.g 'header1=value1,header2=value2'")
+	configFlags.Int("dial-timeout", configuration.DefaultDialTimeout, "TCP dial timeout in seconds for DAPI HTTP clients")
+	configFlags.Int("response-header-timeout", configuration.DefaultResponseHeaderTimeout, "response header timeout in seconds for DAPI HTTP clients")
+	configFlags.Int("request-timeout", configuration.DefaultRequestTimeout, "overall request timeout in seconds for DAPI HTTP clients")
+	configFlags.Int("idle-conn-timeout", configuration.DefaultIdleConnTimeout, "idle connection timeout in seconds for DAPI HTTP clients")
 	rootCmd.Flags().AddFlagSet(configFlags)
 
 	_ = viper.BindPFlags(configFlags)
