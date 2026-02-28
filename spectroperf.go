@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"sync"
 	"time"
@@ -66,7 +67,7 @@ func init() {
 	configFlags.String("log-level", configuration.DefaultLogLevel, "the log level to run at")
 	configFlags.String("workload", "", "workload name")
 	configFlags.Int("num-items", 500, "number of docs to create")
-	configFlags.Int("num-users", 500, "number of concurrent simulated users accessing the data")
+	configFlags.IntSlice("num-users", []int{}, "number of concurrent simulated users accessing the data, can be a single value or a comma-separated list for stepped runs")
 	configFlags.String("run-time", configuration.DefaultRunTime, "total time to run the workload (e.g. '5m', '30s')")
 	configFlags.String("ramp-time", configuration.DefaultRampTime, "length of ramp-up and ramp-down periods (e.g. '1m', '30s')")
 	configFlags.String("only-operation", "", "the only operation to run from the workload")
@@ -163,6 +164,7 @@ func startSpectroperf() {
 	}
 
 	config := configuration.ReadConfig(logger)
+
 	parsedLogLevel, err := zapcore.ParseLevel(config.LogLevel)
 	if err != nil {
 		logger.Warn("invalid log level specified, using INFO instead")
@@ -240,26 +242,26 @@ func startSpectroperf() {
 	logger.Info("scraping operation metrics from prometheus to write to file")
 
 	// Add a minute onto the range to make sure none of the metrics are missed.
-	runTimeMinutes := int(execConfig.RunTime.Minutes())
-	if runTimeMinutes < 1 {
-		runTimeMinutes = 1
-	}
+	timeRange := int(math.Ceil(runTime.Minutes())) + 1
+	metricSummaries := map[string]map[string]workload.OperationSummary{}
 
-	timeRange := runTimeMinutes + 1
-	metricSummaries := map[string]workload.OperationSummary{}
-	for _, op := range w.Operations() {
-		summary, err := workload.SummariseOperationMetrics(op, timeRange)
-		if err != nil {
-			logger.Info("skipping operation due to error", zap.Error(err), zap.String("operation", op))
-			continue
+	for _, numUsers := range config.NumUsers {
+		opSummaries := map[string]workload.OperationSummary{}
+		for _, op := range w.Operations() {
+			summary, err := workload.SummariseOperationMetrics(op, timeRange, numUsers)
+			if err != nil {
+				logger.Warn("skipping operation due to error", zap.Error(err), zap.String("operation", op), zap.Int("users", numUsers))
+				continue
+			}
+
+			opSummaries[op] = *summary
 		}
-
-		metricSummaries[op] = *summary
+		metricSummaries[fmt.Sprintf("%d_users", numUsers)] = opSummaries
 	}
 
 	summaryOutput := map[string]any{}
 	summaryOutput["metricSummaries"] = metricSummaries
-	summaryOutput["steadyStateDurationMins"] = (execConfig.RunTime - (2 * execConfig.RampTime)).Minutes()
+	summaryOutput["steadyStateDurationSecs"] = (runTime - (2 * rampTime)).Seconds()
 
 	bytes, err := json.Marshal(summaryOutput)
 	if err != nil {

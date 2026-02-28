@@ -2,10 +2,15 @@ package workload
 
 import (
 	"context"
+<<<<<<< HEAD
+=======
+	"log"
+>>>>>>> 3654b39 (Add support for "stepped runs")
 	"math/rand"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -46,13 +51,13 @@ func InitMetrics(w Workload, logger *zap.Logger) {
 
 	// Setup metrics
 	for _, operation := range w.Operations() {
-		attemptMetrics[operation] = map[OperationPhase]prometheus.Counter{}
-		failedMetrics[operation] = map[OperationPhase]prometheus.Counter{}
-		durationMetrics[operation] = map[OperationPhase]prometheus.Observer{}
+		attemptMetrics[operation] = map[OperationPhase]map[int]prometheus.Counter{}
+		failedMetrics[operation] = map[OperationPhase]map[int]prometheus.Counter{}
+		durationMetrics[operation] = map[OperationPhase]map[int]prometheus.Observer{}
 		for _, phase := range States {
-			attemptMetrics[operation][phase] = opsAttempted.WithLabelValues(operation, string(phase))
-			failedMetrics[operation][phase] = opsFailed.WithLabelValues(operation, string(phase))
-			durationMetrics[operation][phase] = opDuration.WithLabelValues(operation, string(phase))
+			attemptMetrics[operation][phase] = map[int]prometheus.Counter{}
+			failedMetrics[operation][phase] = map[int]prometheus.Counter{}
+			durationMetrics[operation][phase] = map[int]prometheus.Observer{}
 		}
 	}
 
@@ -123,15 +128,28 @@ func Run(
 	// Signal handler for SIGTERM
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
-	// Create a work group of goroutine runners sharing the same probabilities.
-	var wg sync.WaitGroup
+	for _, nextUserCount := range config.NumUsers {
+		logger.Info("Starting run", zap.Int("users", nextUserCount), zap.String("duration", runTime.String()))
 
 	wg.Add(config.NumUsers)
 	for i := 0; i < config.NumUsers; i++ {
 		go runLoop(ctx, logger, w, config, markovChain, i, &wg, tracer)
-	}
+		for _, op := range w.Operations() {
+			for _, phase := range States {
+				attemptMetrics[op][phase][nextUserCount] = opsAttempted.WithLabelValues(op, string(phase), strconv.Itoa(nextUserCount))
+				failedMetrics[op][phase][nextUserCount] = opsFailed.WithLabelValues(op, string(phase), strconv.Itoa(nextUserCount))
+				durationMetrics[op][phase][nextUserCount] = opDuration.WithLabelValues(op, string(phase), strconv.Itoa(nextUserCount))
+			}
+		}
 
-	wg.Wait()
+		var wg sync.WaitGroup
+		wg.Add(nextUserCount)
+		for i := 0; i < nextUserCount; i++ {
+			go runLoop(ctx, logger, w, config, sleep, i, &wg, tracer, nextUserCount)
+		}
+		wg.Wait()
+	}
+	cancelFn()
 }
 
 func runLoop(
@@ -143,6 +161,7 @@ func runLoop(
 	runnerId int,
 	wg *sync.WaitGroup,
 	tracer *gotel.OpenTelemetryRequestTracer,
+	numUsers int,
 ) {
 	var (
 		currOpIndex   = 0 // Current operation index
@@ -165,52 +184,60 @@ func runLoop(
 	runCtx.l = *logger
 	// todo: move this into context.value, a KV store for junk
 
+	var timeout <-chan time.Time
+	// For fixed runs, each goroutine manages its own timeout.
+	// For stepped runs, the parent `Run` function manages the duration.
+	timeout = time.After(runTime)
+
 	for {
 		select {
 		case <-ctx.Done():
-			logger.Debug("Received cancel, stopping runner", zap.Int("runnerId", runnerId)) // TODO: fix bug where only one runner stops
+			logger.Debug("Received cancel, stopping runner", zap.Int("runnerId", runnerId))
 			wg.Done()
 			return
 		case <-timeout:
+			// This case is only active for fixed-user runs
 			logger.Debug("Run time reached, stopping runner", zap.Int("runnerId", runnerId))
 			wg.Done()
 			return
 		default:
-			// Get the next operation index based on probabilities
-			nextOpIndex := getNextOperation(currOpIndex, probabilities, r)
-			// call the next function
-			nextFunction := operations[nextOpIndex]
-			logger.Debug("next operation", zap.String("operation", nextFunction))
-
-			var t time.Duration
-			if config.Sleep == 0 {
-				// sleep a random amount of time up to 5 seconds
-				t = time.Duration(r.Int31n(5000-400)+400) * time.Millisecond
-			} else {
-				t = config.Sleep
-			}
-			time.Sleep(t)
-
-			phase := MetricState(runStart, runEnd, config.RampTime)
-			attemptMetrics[nextFunction][phase].Inc()
-
-			ctx2, span := tracer.Wrapped().Start(ctx, nextFunction)
-			span.SetAttributes(attribute.Key("workload-phase").String(string(phase)))
-
-			start := time.Now()
-			err := functions[operations[nextOpIndex]](ctx2, runCtx)
-			duration := time.Now().Sub(start)
-			durationMetrics[nextFunction][phase].Observe(float64(duration.Microseconds()) / 1000)
-
-			if err != nil {
-				logger.Error("operation failed", zap.String("operation", nextFunction), zap.Error(err))
-				failedMetrics[nextFunction][phase].Inc()
-			}
-
-			// update for next time
-			currOpIndex = nextOpIndex
-			span.End()
+			// continue
 		}
+
+		// Get the next operation index based on probabilities
+		nextOpIndex := getNextOperation(currOpIndex, probabilities, r)
+		// call the next function
+		nextFunction := operations[nextOpIndex]
+		logger.Debug("next operation", zap.String("operation", nextFunction))
+
+		var t time.Duration
+		if sleep == 0 {
+			// sleep a random amount of time up to 5 seconds
+			t = time.Duration(r.Int31n(5000-400)+400) * time.Millisecond
+		} else {
+			t = sleep
+		}
+		time.Sleep(t)
+
+		phase := MetricState(runStart, runEnd, rampTime)
+		attemptMetrics[nextFunction][phase][numUsers].Inc()
+
+		ctx2, span := tracer.Wrapped().Start(ctx, nextFunction)
+		span.SetAttributes(attribute.Key("workload-phase").String(string(phase)))
+
+		start := time.Now()
+		err := functions[operations[nextOpIndex]](ctx2, runCtx)
+		duration := time.Now().Sub(start)
+		durationMetrics[nextFunction][phase][numUsers].Observe(float64(duration.Microseconds()) / 1000)
+
+		if err != nil {
+			logger.Error("operation failed", zap.String("operation", nextFunction), zap.Error(err))
+			failedMetrics[nextFunction][phase][numUsers].Inc()
+		}
+
+		// update for next time
+		currOpIndex = nextOpIndex
+		span.End()
 	}
 }
 

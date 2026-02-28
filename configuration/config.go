@@ -45,7 +45,7 @@ type Config struct {
 	Scope      string `toml:"scope,omitempty"`
 	Collection string `toml:"collection,omitempty"`
 	NumItems   int    `toml:"num-items,omitempty"`
-	NumUsers   int    `toml:"num-users,omitempty"`
+	NumUsers   []int  `toml:"num-users,omitempty"`
 	ConfigFile string `toml:"config-file,omitempty"`
 
 	Workload string `toml:"workload"`
@@ -82,7 +82,6 @@ func ReadConfig(logger *zap.Logger) *Config {
 		LogLevel:            viper.GetString("log-level"),
 		Workload:            viper.GetString("workload"),
 		NumItems:            viper.GetInt("num-items"),
-		NumUsers:            viper.GetInt("num-users"),
 		RunTime:             viper.GetString("run-time"),
 		RampTime:            viper.GetString("ramp-time"),
 		OnlyOperation:       viper.GetString("only-operation"),
@@ -100,6 +99,28 @@ func ReadConfig(logger *zap.Logger) *Config {
 		RequestTimeout:        viper.GetInt("request-timeout"),
 		IdleConnTimeout:       viper.GetInt("idle-conn-timeout"),
 	}
+
+	// Handle NumUsers which can be a single int or a slice of ints
+	var numUsers []int
+	// Attempt to unmarshal as a slice first.
+	// If num-users is a single int in TOML, this will result in an empty slice without error.
+	// If num-users is a slice in TOML, this will correctly populate numUsers.
+	err = viper.UnmarshalKey("num-users", &numUsers)
+	if err != nil {
+		logger.Warn("failed to unmarshal num-users as slice, trying as single int", zap.Error(err))
+	}
+
+	// If numUsers is still empty, it might have been a single int in TOML.
+	if len(numUsers) == 0 {
+		var singleNumUser int
+		err = viper.UnmarshalKey("num-users", &singleNumUser)
+		if err == nil && singleNumUser != 0 { // singleNumUser != 0 to avoid default 0 if not set
+			numUsers = []int{singleNumUser}
+		} else if err != nil {
+			logger.Warn("failed to unmarshal num-users as single int", zap.Error(err))
+		}
+	}
+	config.NumUsers = numUsers
 
 	logger.Info("parsed configuration", zap.Any("config", config))
 
