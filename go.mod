@@ -6,6 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/HdrHistogram/hdrhistogram-go v1.2.0
 	github.com/brianvoe/gofakeit v3.18.0+incompatible
 	github.com/couchbase/gocb-opentelemetry v0.2.0
 	github.com/couchbase/gocb/v2 v2.11.3

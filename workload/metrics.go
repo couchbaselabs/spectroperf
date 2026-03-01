@@ -1,18 +1,16 @@
 package workload
 
 import (
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"math"
 	"net/http"
-	"net/url"
 	"strconv"
-	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/HdrHistogram/hdrhistogram-go"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.uber.org/zap"
 )
 
 type OperationPhase string
@@ -46,7 +44,7 @@ var (
 		prometheus.HistogramOpts{
 			Name:    OperationDurationMillisMetric,
 			Help:    "Duration of user operations in milliseconds, partitioned by operation.",
-			Buckets: []float64{0.150, 0.225, 0.338, 0.506, 0.759, 1.139, 1.709, 2.563, 3.844, 5.767, 8.650, 12.975, 19.462, 29.193, 43.789, 65.684, 98.526, 147.789, 221.684, 332.526, 498.789, 748.183, 1122.274, 1683.411, 2525.117},
+			Buckets: prometheus.ExponentialBuckets(0.150, 1.5, 25),
 		},
 		[]string{"operation", "phase", "users"},
 	)
@@ -56,8 +54,52 @@ var (
 	failedMetrics   = map[string]map[OperationPhase]map[int]prometheus.Counter{}
 	durationMetrics = map[string]map[OperationPhase]map[int]prometheus.Observer{}
 
+	// In-memory histograms for local metric collection
+	localHistograms     = make(map[string]map[int]*hdrhistogram.Histogram)
+	localFailedCounters = make(map[string]map[int]*atomic.Int64)
+
 	States = []OperationPhase{RampUp, Steady, RampDown}
 )
+
+// InitMetrics initialises the metrics labelled with the operations performed by the given workload
+func InitMetrics(logger *zap.Logger, w Workload, numUsers []int) {
+	// Create a non-global registry.
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(opsAttempted)
+	reg.MustRegister(opsFailed)
+	reg.MustRegister(opDuration)
+
+	// Setup metrics
+	for _, operation := range w.Operations() {
+		attemptMetrics[operation] = map[OperationPhase]map[int]prometheus.Counter{}
+		failedMetrics[operation] = map[OperationPhase]map[int]prometheus.Counter{}
+		durationMetrics[operation] = map[OperationPhase]map[int]prometheus.Observer{}
+
+		localHistograms[operation] = make(map[int]*hdrhistogram.Histogram)
+		localFailedCounters[operation] = make(map[int]*atomic.Int64)
+
+		for _, phase := range States {
+			attemptMetrics[operation][phase] = make(map[int]prometheus.Counter)
+			failedMetrics[operation][phase] = make(map[int]prometheus.Counter)
+			durationMetrics[operation][phase] = make(map[int]prometheus.Observer)
+
+			for _, numUser := range numUsers {
+				attemptMetrics[operation][phase][numUser] = opsAttempted.WithLabelValues(operation, string(phase), strconv.Itoa(numUser))
+				failedMetrics[operation][phase][numUser] = opsFailed.WithLabelValues(operation, string(phase), strconv.Itoa(numUser))
+				durationMetrics[operation][phase][numUser] = opDuration.WithLabelValues(operation, string(phase), strconv.Itoa(numUser))
+
+				localHistograms[operation][numUser] = hdrhistogram.New(1, 60000000, 5)
+				localFailedCounters[operation][numUser] = &atomic.Int64{}
+			}
+		}
+	}
+
+	// Expose metrics and custom registry via an HTTP server
+	go func() {
+		http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
+		logger.Fatal("prometheus handler failed", zap.Error(http.ListenAndServe(":2112", nil)))
+	}()
+}
 
 func MetricState(start time.Time, end time.Time, rampTime time.Duration) OperationPhase {
 	phase := Steady
@@ -69,53 +111,10 @@ func MetricState(start time.Time, end time.Time, rampTime time.Duration) Operati
 	return phase
 }
 
-// PrometheusIsRunning returns a bool that represents if prometheus is running.
-func PrometheusIsRunning() bool {
-	// Try to run the most basic prometheus metric
-	_, err := executeQuery("up")
-	return err == nil
-}
-
-// TotalOperations returns the total number of times the given operation
-// was performed in the given range.
-func TotalOperations(op string, timeRange int) (int, error) {
-	query := fmt.Sprintf(`increase(%s{phase="Steady",operation="%s"}[%dm])`, TotalOperationsMetric, op, timeRange)
-	total, err := processQuery(query, op)
-	if err != nil {
-		return 0, err
-	}
-
-	return int(math.Round(total)), nil
-}
-
-// TotalOperationsFailed returns the number of times a given operation
-// failed in the given range.
-func TotalOperationsFailed(op string, timeRange int, numUsers int) (int, error) {
-	query := fmt.Sprintf(`increase(%s{phase="Steady",operation="%s",users="%d"}[%dm])`, TotalFailedOperationsMetric, op, numUsers, timeRange)
-	total, err := processQuery(query, op)
-	if err != nil {
-		return 0, err
-	}
-
-	return int(math.Round(total)), nil
-}
-
-// LatencyPercentile returns the given percentile latency for the chosen
-// operation in milliseconds, in the given time range.
-func LatencyPercentile(op string, timeRange int, percentile int, numUsers int) (float64, error) {
-	if percentile < 1 || percentile > 99 {
-		return 0, errors.New("percentile must be between 1 and 99 inclusive")
-	}
-
-	query := fmt.Sprintf(
-		`histogram_quantile(%.2f, sum(rate(%s_bucket{operation="%s",phase="Steady",users="%d"}[%dm])) by (le))`,
-		float64(percentile)/100,
-		OperationDurationMillisMetric,
-		op,
-		numUsers,
-		timeRange)
-
-	return processQuery(query, op)
+type RunSummary struct {
+	NumUsers                int                `json:"numUsers"`
+	SteadyStateDurationSecs int                `json:"steadyStateDurationSecs"`
+	Operations              []OperationSummary `json:"operations"`
 }
 
 type LatencyPercentiles struct {
@@ -129,148 +128,71 @@ type LatencyPercentiles struct {
 // given operation. It holds the total number of that operation attempted,
 // the number that failed and some latency percentiles.
 type OperationSummary struct {
+	Name      string             `json:"name"`
 	Total     int                `json:"total"`
 	Failed    int                `json:"failed"`
-	NumUsers  int                `json:"numUsers"`
 	Latencies LatencyPercentiles `json:"latencyPercentiles"`
 }
 
-// SummariseOperationMetrics queries the http api of the prometheus instance
-// that has been scraping spectroperf to prioduce a summary of the metrics for
-// a given operation.
-func SummariseOperationMetrics(op string, timeRange int, numUsers int) (*OperationSummary, error) {
-	total, err := TotalOperations(op, timeRange)
-	if err != nil {
-		return nil, err
+// summariseOperationMetrics generates a summary from HDR histograms.
+func summariseOperationMetrics(op string, numUsers int) (*OperationSummary, error) {
+	hist, histOk := localHistograms[op][numUsers]
+
+	var totalSuccess int
+	var latencies LatencyPercentiles
+
+	if histOk {
+		totalSuccess = int(hist.TotalCount())
+		latencies = LatencyPercentiles{
+			NinetyNinth:  getQuantile(hist, 99),
+			NinetyEighth: getQuantile(hist, 98),
+			NinetyFifth:  getQuantile(hist, 95),
+			Fiftieth:     getQuantile(hist, 50),
+		}
 	}
 
-	totalFailed, err := TotalOperationsFailed(op, timeRange, numUsers)
-	if err != nil {
-		return nil, err
+	failed := 0
+	if counter, ok := localFailedCounters[op][numUsers]; ok {
+		failed = int(counter.Load())
 	}
 
-	ninetyNinth, err := LatencyPercentile(op, timeRange, 99, numUsers)
-	if err != nil {
-		return nil, err
-	}
-
-	ninetyEighth, err := LatencyPercentile(op, timeRange, 98, numUsers)
-	if err != nil {
-		return nil, err
-	}
-
-	ninetyFifth, err := LatencyPercentile(op, timeRange, 95, numUsers)
-	if err != nil {
-		return nil, err
-	}
-
-	fiftieth, err := LatencyPercentile(op, timeRange, 50, numUsers)
-	if err != nil {
-		return nil, err
+	if totalSuccess == 0 && failed == 0 {
+		return nil, fmt.Errorf("no local steady state metrics recorded for operation %s, numUsers %d", op, numUsers)
 	}
 
 	summary := OperationSummary{
-		Total:    total,
-		Failed:   totalFailed,
-		NumUsers: numUsers,
-		Latencies: LatencyPercentiles{
-			NinetyNinth:  ninetyNinth,
-			NinetyEighth: ninetyEighth,
-			NinetyFifth:  ninetyFifth,
-			Fiftieth:     fiftieth,
-		},
+		Name:      op,
+		Total:     totalSuccess + failed,
+		Failed:    failed,
+		Latencies: latencies,
 	}
 	return &summary, nil
 }
 
-// The following structs combine to represent the output structure returned from
-// the prometheus HTTP API.
-type queryResult struct {
-	Data queryData `json:"data"`
+func CreateSummary(logger *zap.Logger, numUsers int, w Workload, runTime, rampTime time.Duration) RunSummary {
+	var summary RunSummary
+
+	summary.NumUsers = numUsers
+	summary.SteadyStateDurationSecs = int(runTime.Seconds() - (2 * rampTime.Seconds()))
+	summary.Operations = make([]OperationSummary, len(w.Operations()))
+	for i, op := range w.Operations() {
+		metricSummary, err := summariseOperationMetrics(op, numUsers)
+		if err != nil {
+			logger.Warn("skipping local summary due to error", zap.Error(err), zap.String("operation", op), zap.Int("users", numUsers))
+			// Create an empty summary so the array structure is maintained
+			summary.Operations[i] = OperationSummary{Name: op}
+			continue
+		}
+		summary.Operations[i] = *metricSummary
+	}
+
+	return summary
 }
 
-type queryData struct {
-	Result []result `json:"result"`
-}
-
-type result struct {
-	Value []any `json:"value"`
-}
-
-// executeQuery executes the given query against the prometheus instance running
-// on ...
-func executeQuery(query string) (*queryResult, error) {
-	form := url.Values{}
-	form.Add("query", query)
-
-	req, err := http.NewRequest("POST", "http://localhost:9090/api/v1/query", strings.NewReader(form.Encode()))
-	if err != nil {
-		return nil, err
+// getQuantile is a helper to safely get a quantile value from a histogram, returning 0 if the histogram is nil.
+func getQuantile(hist *hdrhistogram.Histogram, quantile float64) float64 {
+	if hist == nil || hist.TotalCount() == 0 {
+		return 0
 	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	hc := http.Client{}
-	resp, err := hc.Do(req)
-	if err != nil {
-		return nil, err
-	}
-
-	bodyText, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	err = resp.Body.Close()
-	if err != nil {
-		return nil, err
-	}
-
-	var result queryResult
-	err = json.Unmarshal(bodyText, &result)
-	if err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}
-
-// processQuery executes the given query against the prometheus http api and
-// parses the result. Returning the value resulting from the query if successful
-// or zero and an error is logged.
-func processQuery(query, op string) (float64, error) {
-	result, err := executeQuery(query)
-	if err != nil {
-		return 0, fmt.Errorf("executing metric query: %w", err)
-	}
-
-	value, err := parseQueryResult(result)
-	if err != nil {
-		return 0, fmt.Errorf("parsing query result: %w", err)
-	}
-
-	return value, nil
-}
-
-// parseQueryResult reads the value of the queried metric from the struct
-// retunred by the prometheus api.
-func parseQueryResult(result *queryResult) (float64, error) {
-	if len(result.Data.Result) == 0 {
-		return 0, errors.New("no results for operation")
-	}
-
-	if len(result.Data.Result[0].Value) != 2 {
-		return 0, errors.New("no values for the result for operation")
-	}
-
-	stringValue := result.Data.Result[0].Value[1].(string)
-	if stringValue == "NaN" {
-		return 0, errors.New("result value was NaN")
-	}
-
-	parsed, err := strconv.ParseFloat(stringValue, 32)
-	if err != nil {
-		return 0, fmt.Errorf("parsing metric value as float: %w", err)
-	}
-
-	return parsed, nil
+	return float64(hist.ValueAtQuantile(quantile)) / 1000.0
 }
