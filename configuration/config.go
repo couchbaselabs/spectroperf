@@ -22,6 +22,9 @@ const (
 
 	DefaultOtlpEndpoint = "localhost:4318"
 
+	DefaultRunTime  = "5m"
+	DefaultRampTime = "0m"
+
 	DefaultDialTimeout           = 10
 	DefaultResponseHeaderTimeout = 30
 	DefaultRequestTimeout        = 60
@@ -47,8 +50,8 @@ type Config struct {
 
 	Workload string `toml:"workload"`
 
-	RunTime             int         `toml:"run-time,omitempty"`
-	RampTime            int         `toml:"ramp-time,omitempty"`
+	RunTime             string      `toml:"run-time,omitempty"`
+	RampTime            string      `toml:"ramp-time,omitempty"`
 	OtlpEndpoint        string      `toml:"otlp-endpoint,omitempty"`
 	EnableTracing       bool        `toml:"enable-tracing,omitempty"`
 	OtelExporterHeaders string      `toml:"otel-exported-headers,omitempty"`
@@ -80,8 +83,8 @@ func ReadConfig(logger *zap.Logger) *Config {
 		Workload:            viper.GetString("workload"),
 		NumItems:            viper.GetInt("num-items"),
 		NumUsers:            viper.GetInt("num-users"),
-		RunTime:             viper.GetInt("run-time"),
-		RampTime:            viper.GetInt("ramp-time"),
+		RunTime:             viper.GetString("run-time"),
+		RampTime:            viper.GetString("ramp-time"),
 		OnlyOperation:       viper.GetString("only-operation"),
 		Sleep:               viper.GetString("sleep"),
 		Bucket:              viper.GetString("bucket"),
@@ -119,6 +122,14 @@ func WriteConfig(config *Config, timeStamp string, defaultMarkov [][]float64) er
 }
 
 func clearDefaults(config *Config, defaultMarkov [][]float64) {
+	if config.RunTime == DefaultRunTime {
+		config.RunTime = ""
+	}
+
+	if config.RampTime == DefaultRampTime {
+		config.RampTime = ""
+	}
+
 	if config.Username == DefaultUsername {
 		config.Username = ""
 	}
