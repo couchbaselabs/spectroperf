@@ -22,6 +22,9 @@ const (
 
 	DefaultOtlpEndpoint = "localhost:4318"
 
+	DefaultRunTime  = "5m"
+	DefaultRampTime = "0m"
+
 	DefaultDialTimeout           = 10
 	DefaultResponseHeaderTimeout = 30
 	DefaultRequestTimeout        = 60
@@ -119,6 +122,14 @@ func WriteConfig(config *Config, timeStamp string, defaultMarkov [][]float64) er
 }
 
 func clearDefaults(config *Config, defaultMarkov [][]float64) {
+	if config.RunTime == DefaultRunTime {
+		config.RunTime = ""
+	}
+
+	if config.RampTime == DefaultRampTime {
+		config.RampTime = ""
+	}
+
 	if config.Username == DefaultUsername {
 		config.Username = ""
 	}
