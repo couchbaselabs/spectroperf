@@ -62,29 +62,6 @@ type Config struct {
 	IdleConnTimeout       int `toml:"idle-conn-timeout,omitempty"`
 }
 
-func intOrDefault(val, def int) int {
-	if val == 0 {
-		return def
-	}
-	return val
-}
-
-func (c *Config) GetDialTimeout() int {
-	return intOrDefault(c.DialTimeout, DefaultDialTimeout)
-}
-
-func (c *Config) GetResponseHeaderTimeout() int {
-	return intOrDefault(c.ResponseHeaderTimeout, DefaultResponseHeaderTimeout)
-}
-
-func (c *Config) GetRequestTimeout() int {
-	return intOrDefault(c.RequestTimeout, DefaultRequestTimeout)
-}
-
-func (c *Config) GetIdleConnTimeout() int {
-	return intOrDefault(c.IdleConnTimeout, DefaultIdleConnTimeout)
-}
-
 func ReadConfig(logger *zap.Logger) *Config {
 	var markovChain [][]float64
 	err := viper.UnmarshalKey("markov-chain", &markovChain)
@@ -168,22 +145,6 @@ func clearDefaults(config *Config, defaultMarkov [][]float64) {
 
 	if config.OtlpEndpoint == DefaultOtlpEndpoint {
 		config.OtlpEndpoint = ""
-	}
-
-	if config.DialTimeout == DefaultDialTimeout {
-		config.DialTimeout = 0
-	}
-
-	if config.ResponseHeaderTimeout == DefaultResponseHeaderTimeout {
-		config.ResponseHeaderTimeout = 0
-	}
-
-	if config.RequestTimeout == DefaultRequestTimeout {
-		config.RequestTimeout = 0
-	}
-
-	if config.IdleConnTimeout == DefaultIdleConnTimeout {
-		config.IdleConnTimeout = 0
 	}
 
 	markovChainDefault := true
