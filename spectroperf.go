@@ -63,8 +63,8 @@ func init() {
 	configFlags.String("workload", "", "workload name")
 	configFlags.Int("num-items", 500, "number of docs to create")
 	configFlags.Int("num-users", 500, "number of concurrent simulated users accessing the data")
-	configFlags.Int("run-time", 5, "total time to run the workload in minutes")
-	configFlags.Int("ramp-time", 0, "length of ramp-up and ramp-down periods in minutes")
+	configFlags.String("run-time", "5m", "total time to run the workload (e.g. '5m', '30s')")
+	configFlags.String("ramp-time", "0m", "length of ramp-up and ramp-down periods (e.g. '1m', '30s')")
 	configFlags.String("only-operation", "", "the only operation to run from the workload")
 	configFlags.String("sleep", "", "time to sleep between operations")
 	configFlags.String("bucket", configuration.DefaultBucket, "bucket name")
@@ -164,7 +164,17 @@ func startSpectroperf() {
 		caCertPool.AppendCertsFromPEM(caCert)
 	}
 
-	if config.RampTime > config.RunTime/2 {
+	runTime, err := time.ParseDuration(config.RunTime)
+	if err != nil {
+		logger.Fatal("parsing run time duration from config", zap.Error(err))
+	}
+
+	rampTime, err := time.ParseDuration(config.RampTime)
+	if err != nil {
+		logger.Fatal("parsing ramp time duration from config", zap.Error(err))
+	}
+
+	if rampTime > runTime/2 {
 		logger.Fatal("Ramp time cannot be greater than half of the total runtime")
 	}
 
@@ -246,7 +256,7 @@ func startSpectroperf() {
 	collection := bucket.Scope(config.Scope).Collection(config.Collection)
 	workload.Setup(w, logger, config.NumItems, collection)
 
-	workload.Run(w, logger, config, tracer, sleep)
+	workload.Run(w, logger, config, tracer, runTime, rampTime, sleep)
 
 	wg.Wait()
 
@@ -264,7 +274,12 @@ func startSpectroperf() {
 	logger.Info("scraping operation metrics from prometheus to write to file")
 
 	// Add a minute onto the range to make sure none of the metrics are missed.
-	timeRange := config.RunTime + 1
+	runTimeMinutes := int(runTime.Minutes())
+	if runTime.Minutes() < 1 {
+		runTimeMinutes = 1
+	}
+
+	timeRange := runTimeMinutes + 1
 	metricSummaries := map[string]workload.OperationSummary{}
 	for _, op := range w.Operations() {
 		summary, err := workload.SummariseOperationMetrics(op, timeRange)
@@ -278,7 +293,7 @@ func startSpectroperf() {
 
 	summaryOutput := map[string]any{}
 	summaryOutput["metricSummaries"] = metricSummaries
-	summaryOutput["steadyStateDurationMins"] = config.RunTime - (2 * config.RampTime)
+	summaryOutput["steadyStateDurationMins"] = (runTime - (2 * rampTime)).Minutes()
 
 	bytes, err := json.Marshal(summaryOutput)
 	if err != nil {

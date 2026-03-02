@@ -110,6 +110,8 @@ func Run(
 	logger *zap.Logger,
 	config *configuration.Config,
 	tracer *gotel.OpenTelemetryRequestTracer,
+	runTime time.Duration,
+	rampTime time.Duration,
 	sleep time.Duration,
 ) {
 	logger.Info("Running workload…\n")
@@ -130,7 +132,7 @@ func Run(
 
 	wg.Add(config.NumUsers)
 	for i := 0; i < config.NumUsers; i++ {
-		go runLoop(ctx, logger, w, config, sleep, i, &wg, tracer)
+		go runLoop(ctx, logger, w, config, runTime, rampTime, sleep, i, &wg, tracer)
 	}
 
 	wg.Wait()
@@ -141,6 +143,8 @@ func runLoop(
 	logger *zap.Logger,
 	workload Workload,
 	config *configuration.Config,
+	runTime time.Duration,
+	rampTime time.Duration,
 	sleep time.Duration,
 	runnerId int,
 	wg *sync.WaitGroup,
@@ -149,8 +153,6 @@ func runLoop(
 	var (
 		currOpIndex   = 0 // Current operation index
 		probabilities = config.MarkovChain
-		runTime       = time.Duration(config.RunTime) * time.Minute
-		rampTime      = time.Duration(config.RampTime) * time.Minute
 		functions     = workload.Functions()
 		operations    = workload.Operations()
 	)

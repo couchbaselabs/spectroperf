@@ -47,8 +47,8 @@ type Config struct {
 
 	Workload string `toml:"workload"`
 
-	RunTime             int         `toml:"run-time,omitempty"`
-	RampTime            int         `toml:"ramp-time,omitempty"`
+	RunTime             string      `toml:"run-time,omitempty"`
+	RampTime            string      `toml:"ramp-time,omitempty"`
 	OtlpEndpoint        string      `toml:"otlp-endpoint,omitempty"`
 	EnableTracing       bool        `toml:"enable-tracing,omitempty"`
 	OtelExporterHeaders string      `toml:"otel-exported-headers,omitempty"`
@@ -80,8 +80,8 @@ func ReadConfig(logger *zap.Logger) *Config {
 		Workload:            viper.GetString("workload"),
 		NumItems:            viper.GetInt("num-items"),
 		NumUsers:            viper.GetInt("num-users"),
-		RunTime:             viper.GetInt("run-time"),
-		RampTime:            viper.GetInt("ramp-time"),
+		RunTime:             viper.GetString("run-time"),
+		RampTime:            viper.GetString("ramp-time"),
 		OnlyOperation:       viper.GetString("only-operation"),
 		Sleep:               viper.GetString("sleep"),
 		Bucket:              viper.GetString("bucket"),
