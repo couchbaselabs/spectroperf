@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	gotel "github.com/couchbase/gocb-opentelemetry"
+	"github.com/couchbaselabs/spectroperf/configuration"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -16,11 +17,16 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	"go.opentelemetry.io/otel/trace"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
+	"go.uber.org/zap"
 )
 
 // setupOTelSDK bootstraps the OpenTelemetry pipeline.
 // If it does not return an error, make sure to call shutdown for proper cleanup.
-func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, otelExporterHeaders string) (shutdown func(context.Context) error, tracer *gotel.OpenTelemetryRequestTracer, err error) {
+func SetupOTelSDK(
+	ctx context.Context,
+	logger *zap.Logger,
+	config *configuration.Config,
+) (shutdown func(context.Context) error, tracer *gotel.OpenTelemetryRequestTracer, err error) {
 	var shutdownFuncs []func(context.Context) error
 
 	// shutdown calls cleanup functions registered via shutdownFuncs.
@@ -41,12 +47,12 @@ func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, otel
 	}
 
 	var tp trace.TracerProvider
-	if enableTracing {
+	if config.EnableTracing {
 		var te *otlptrace.Exporter
 
-		if otelExporterHeaders != "" {
+		if config.OtelExporterHeaders != "" {
 			headers := map[string]string{}
-			for _, h := range strings.Split(otelExporterHeaders, ",") {
+			for _, h := range strings.Split(config.OtelExporterHeaders, ",") {
 				splitHeader := strings.Split(h, "=")
 				if len(splitHeader) != 2 {
 					return nil, nil, fmt.Errorf("invalid otel-exporter-headers format: %s", h)
@@ -55,16 +61,16 @@ func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, otel
 				headers[splitHeader[0]] = splitHeader[1]
 			}
 
-			te, err = otlptracehttp.New(context.Background(), otlptracehttp.WithEndpoint(endpoint), otlptracehttp.WithHeaders(headers))
+			te, err = otlptracehttp.New(ctx, otlptracehttp.WithEndpoint(config.OtlpEndpoint), otlptracehttp.WithHeaders(headers))
 		} else {
-			te, err = otlptracehttp.New(context.Background(), otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(endpoint))
+			te, err = otlptracehttp.New(ctx, otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(config.OtlpEndpoint))
 		}
 
 		if err != nil {
 			return nil, nil, handleErr(err)
 		}
 
-		res, err := resource.New(context.Background(),
+		res, err := resource.New(ctx,
 			resource.WithFromEnv(),
 			resource.WithProcess(),
 			resource.WithTelemetrySDK(),
@@ -88,6 +94,13 @@ func SetupOTelSDK(ctx context.Context, endpoint string, enableTracing bool, otel
 		shutdownFuncs = append(shutdownFuncs, sdkTp.Shutdown)
 		tp = sdkTp
 	} else {
+		if config.OtlpEndpoint != configuration.DefaultOtlpEndpoint || len(config.OtelExporterHeaders) > 0 {
+			logger.Warn("tracing is disabled but OTEL exporter configuration is set; these values will be ignored",
+				zap.String("otlpEndpoint", config.OtlpEndpoint),
+				zap.Any("otelExporterHeaders", config.OtelExporterHeaders),
+			)
+		}
+
 		tp = tracenoop.NewTracerProvider()
 	}
 
