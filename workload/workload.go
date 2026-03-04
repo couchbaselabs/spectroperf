@@ -2,8 +2,6 @@ package workload
 
 import (
 	"context"
-	"log"
-	"log/slog"
 	"math/rand"
 	"net/http"
 	"os"
@@ -39,7 +37,7 @@ type Workload interface {
 }
 
 // InitMetrics initialises the metrics labelled with the operations performed by the given workload
-func InitMetrics(w Workload) {
+func InitMetrics(w Workload, logger *zap.Logger) {
 	// Create a non-global registry.
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(opsAttempted)
@@ -61,7 +59,7 @@ func InitMetrics(w Workload) {
 	// Expose metrics and custom registry via an HTTP server
 	go func() {
 		http.Handle("/metrics", promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg}))
-		log.Fatal(http.ListenAndServe(":2112", nil))
+		logger.Fatal("prometheus handler failed", zap.Error(http.ListenAndServe(":2112", nil)))
 	}()
 }
 
@@ -108,11 +106,9 @@ func Setup(w Workload, logger *zap.Logger, numItemsArg int, coll *gocb.Collectio
 func Run(
 	w Workload,
 	logger *zap.Logger,
-	config *configuration.Config,
+	config *configuration.ExecutionConfig,
+	markovChain [][]float64,
 	tracer *gotel.OpenTelemetryRequestTracer,
-	runTime time.Duration,
-	rampTime time.Duration,
-	sleep time.Duration,
 ) {
 	logger.Info("Running workload…\n")
 
@@ -132,7 +128,7 @@ func Run(
 
 	wg.Add(config.NumUsers)
 	for i := 0; i < config.NumUsers; i++ {
-		go runLoop(ctx, logger, w, config, runTime, rampTime, sleep, i, &wg, tracer)
+		go runLoop(ctx, logger, w, config, markovChain, i, &wg, tracer)
 	}
 
 	wg.Wait()
@@ -142,17 +138,15 @@ func runLoop(
 	ctx context.Context,
 	logger *zap.Logger,
 	workload Workload,
-	config *configuration.Config,
-	runTime time.Duration,
-	rampTime time.Duration,
-	sleep time.Duration,
+	config *configuration.ExecutionConfig,
+	markovChain [][]float64,
 	runnerId int,
 	wg *sync.WaitGroup,
 	tracer *gotel.OpenTelemetryRequestTracer,
 ) {
 	var (
 		currOpIndex   = 0 // Current operation index
-		probabilities = config.MarkovChain
+		probabilities = markovChain
 		functions     = workload.Functions()
 		operations    = workload.Operations()
 	)
@@ -160,11 +154,11 @@ func runLoop(
 	rng := rand.NewSource(int64(RandSeed + runnerId))
 	r := rand.New(rng)
 
-	timeout := time.After(runTime)
+	timeout := time.After(config.RunTime)
 
 	logger.Debug("Starting runner", zap.Int("runnerId", runnerId))
 	runStart := time.Now()
-	runEnd := runStart.Add(runTime)
+	runEnd := runStart.Add(config.RunTime)
 
 	var runCtx Runctx
 	runCtx.r = *r
@@ -176,26 +170,28 @@ func runLoop(
 		case <-ctx.Done():
 			logger.Debug("Received cancel, stopping runner", zap.Int("runnerId", runnerId)) // TODO: fix bug where only one runner stops
 			wg.Done()
+			return
 		case <-timeout:
 			logger.Debug("Run time reached, stopping runner", zap.Int("runnerId", runnerId))
 			wg.Done()
+			return
 		default:
 			// Get the next operation index based on probabilities
 			nextOpIndex := getNextOperation(currOpIndex, probabilities, r)
 			// call the next function
 			nextFunction := operations[nextOpIndex]
-			slog.Debug(nextFunction)
+			logger.Debug("next operation", zap.String("operation", nextFunction))
 
 			var t time.Duration
-			if sleep == 0 {
+			if config.Sleep == 0 {
 				// sleep a random amount of time up to 5 seconds
 				t = time.Duration(r.Int31n(5000-400)+400) * time.Millisecond
 			} else {
-				t = sleep
+				t = config.Sleep
 			}
 			time.Sleep(t)
 
-			phase := MetricState(runStart, runEnd, rampTime)
+			phase := MetricState(runStart, runEnd, config.RampTime)
 			attemptMetrics[nextFunction][phase].Inc()
 
 			ctx2, span := tracer.Wrapped().Start(ctx, nextFunction)
