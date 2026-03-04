@@ -33,14 +33,14 @@ var (
 			Name: TotalOperationsMetric,
 			Help: "How many user operations are attempted, partitioned by operation.",
 		},
-		[]string{"operation", "phase"},
+		[]string{"operation", "phase", "users"},
 	)
 	opsFailed = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: TotalFailedOperationsMetric,
 			Help: "How many user operations failed, partitioned by operation.",
 		},
-		[]string{"operation", "phase"},
+		[]string{"operation", "phase", "users"},
 	)
 	opDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
@@ -48,13 +48,13 @@ var (
 			Help:    "Duration of user operations in milliseconds, partitioned by operation.",
 			Buckets: []float64{0.150, 0.225, 0.338, 0.506, 0.759, 1.139, 1.709, 2.563, 3.844, 5.767, 8.650, 12.975, 19.462, 29.193, 43.789, 65.684, 98.526, 147.789, 221.684, 332.526, 498.789, 748.183, 1122.274, 1683.411, 2525.117},
 		},
-		[]string{"operation", "phase"},
+		[]string{"operation", "phase", "users"},
 	)
 
 	// Maps from the operation to an attempted/failed metric labelled with the operation
-	attemptMetrics  = map[string]map[OperationPhase]prometheus.Counter{}
-	failedMetrics   = map[string]map[OperationPhase]prometheus.Counter{}
-	durationMetrics = map[string]map[OperationPhase]prometheus.Observer{}
+	attemptMetrics  = map[string]map[OperationPhase]map[int]prometheus.Counter{}
+	failedMetrics   = map[string]map[OperationPhase]map[int]prometheus.Counter{}
+	durationMetrics = map[string]map[OperationPhase]map[int]prometheus.Observer{}
 
 	States = []OperationPhase{RampUp, Steady, RampDown}
 )
@@ -90,8 +90,8 @@ func TotalOperations(op string, timeRange int) (int, error) {
 
 // TotalOperationsFailed returns the number of times a given operation
 // failed in the given range.
-func TotalOperationsFailed(op string, timeRange int) (int, error) {
-	query := fmt.Sprintf(`increase(%s{phase="Steady",operation="%s"}[%dm])`, TotalFailedOperationsMetric, op, timeRange)
+func TotalOperationsFailed(op string, timeRange int, numUsers int) (int, error) {
+	query := fmt.Sprintf(`increase(%s{phase="Steady",operation="%s",users="%d"}[%dm])`, TotalFailedOperationsMetric, op, numUsers, timeRange)
 	total, err := processQuery(query, op)
 	if err != nil {
 		return 0, err
@@ -102,16 +102,17 @@ func TotalOperationsFailed(op string, timeRange int) (int, error) {
 
 // LatencyPercentile returns the given percentile latency for the chosen
 // operation in milliseconds, in the given time range.
-func LatencyPercentile(op string, timeRange int, percentile int) (float64, error) {
+func LatencyPercentile(op string, timeRange int, percentile int, numUsers int) (float64, error) {
 	if percentile < 1 || percentile > 99 {
 		return 0, errors.New("percentile must be between 1 and 99 inclusive")
 	}
 
 	query := fmt.Sprintf(
-		`histogram_quantile(%.2f, sum(rate(%s_bucket{operation="%s",phase="Steady"}[%dm])) by (le))`,
+		`histogram_quantile(%.2f, sum(rate(%s_bucket{operation="%s",phase="Steady",users="%d"}[%dm])) by (le))`,
 		float64(percentile)/100,
 		OperationDurationMillisMetric,
 		op,
+		numUsers,
 		timeRange)
 
 	return processQuery(query, op)
@@ -130,46 +131,48 @@ type LatencyPercentiles struct {
 type OperationSummary struct {
 	Total     int                `json:"total"`
 	Failed    int                `json:"failed"`
+	NumUsers  int                `json:"numUsers"`
 	Latencies LatencyPercentiles `json:"latencyPercentiles"`
 }
 
 // SummariseOperationMetrics queries the http api of the prometheus instance
 // that has been scraping spectroperf to prioduce a summary of the metrics for
 // a given operation.
-func SummariseOperationMetrics(op string, timeRange int) (*OperationSummary, error) {
+func SummariseOperationMetrics(op string, timeRange int, numUsers int) (*OperationSummary, error) {
 	total, err := TotalOperations(op, timeRange)
 	if err != nil {
 		return nil, err
 	}
 
-	totalFailed, err := TotalOperationsFailed(op, timeRange)
+	totalFailed, err := TotalOperationsFailed(op, timeRange, numUsers)
 	if err != nil {
 		return nil, err
 	}
 
-	ninetyNinth, err := LatencyPercentile(op, timeRange, 99)
+	ninetyNinth, err := LatencyPercentile(op, timeRange, 99, numUsers)
 	if err != nil {
 		return nil, err
 	}
 
-	ninetyEighth, err := LatencyPercentile(op, timeRange, 98)
+	ninetyEighth, err := LatencyPercentile(op, timeRange, 98, numUsers)
 	if err != nil {
 		return nil, err
 	}
 
-	ninetyFifth, err := LatencyPercentile(op, timeRange, 95)
+	ninetyFifth, err := LatencyPercentile(op, timeRange, 95, numUsers)
 	if err != nil {
 		return nil, err
 	}
 
-	fiftieth, err := LatencyPercentile(op, timeRange, 50)
+	fiftieth, err := LatencyPercentile(op, timeRange, 50, numUsers)
 	if err != nil {
 		return nil, err
 	}
 
 	summary := OperationSummary{
-		Total:  total,
-		Failed: totalFailed,
+		Total:    total,
+		Failed:   totalFailed,
+		NumUsers: numUsers,
 		Latencies: LatencyPercentiles{
 			NinetyNinth:  ninetyNinth,
 			NinetyEighth: ninetyEighth,
