@@ -13,7 +13,7 @@ type ExecutionConfig struct {
 	RunTime    time.Duration
 	RampTime   time.Duration
 	Sleep      time.Duration
-	NumUsers   int
+	NumUsers   []int
 	NumItems   int
 	Scope      string
 	Collection string
@@ -25,8 +25,10 @@ func CreateExecutionConfig(logger *zap.Logger, config *Config) (*ExecutionConfig
 		return nil, errors.New("no connection string provided")
 	}
 
-	if config.NumUsers <= 0 {
-		return nil, errors.New("number of users must be greater than 0")
+	for _, numUsers := range config.NumUsers {
+		if numUsers <= 0 {
+			return nil, errors.New("number of users must be greater than 0")
+		}
 	}
 
 	if config.NumItems <= 0 {

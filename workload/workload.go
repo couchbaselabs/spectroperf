@@ -2,10 +2,6 @@ package workload
 
 import (
 	"context"
-<<<<<<< HEAD
-=======
-	"log"
->>>>>>> 3654b39 (Add support for "stepped runs")
 	"math/rand"
 	"net/http"
 	"os"
@@ -42,7 +38,7 @@ type Workload interface {
 }
 
 // InitMetrics initialises the metrics labelled with the operations performed by the given workload
-func InitMetrics(w Workload, logger *zap.Logger) {
+func InitMetrics(logger *zap.Logger, w Workload, numUsers []int) {
 	// Create a non-global registry.
 	reg := prometheus.NewRegistry()
 	reg.MustRegister(opsAttempted)
@@ -55,9 +51,15 @@ func InitMetrics(w Workload, logger *zap.Logger) {
 		failedMetrics[operation] = map[OperationPhase]map[int]prometheus.Counter{}
 		durationMetrics[operation] = map[OperationPhase]map[int]prometheus.Observer{}
 		for _, phase := range States {
-			attemptMetrics[operation][phase] = map[int]prometheus.Counter{}
-			failedMetrics[operation][phase] = map[int]prometheus.Counter{}
-			durationMetrics[operation][phase] = map[int]prometheus.Observer{}
+			attemptMetrics[operation][phase] = make(map[int]prometheus.Counter)
+			failedMetrics[operation][phase] = make(map[int]prometheus.Counter)
+			durationMetrics[operation][phase] = make(map[int]prometheus.Observer)
+
+			for _, numUser := range numUsers {
+				attemptMetrics[operation][phase][numUser] = opsAttempted.WithLabelValues(operation, string(phase), strconv.Itoa(numUser))
+				failedMetrics[operation][phase][numUser] = opsFailed.WithLabelValues(operation, string(phase), strconv.Itoa(numUser))
+				durationMetrics[operation][phase][numUser] = opDuration.WithLabelValues(operation, string(phase), strconv.Itoa(numUser))
+			}
 		}
 	}
 
@@ -129,25 +131,19 @@ func Run(
 	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
 
 	for _, nextUserCount := range config.NumUsers {
-		logger.Info("Starting run", zap.Int("users", nextUserCount), zap.String("duration", runTime.String()))
-
-	wg.Add(config.NumUsers)
-	for i := 0; i < config.NumUsers; i++ {
-		go runLoop(ctx, logger, w, config, markovChain, i, &wg, tracer)
-		for _, op := range w.Operations() {
-			for _, phase := range States {
-				attemptMetrics[op][phase][nextUserCount] = opsAttempted.WithLabelValues(op, string(phase), strconv.Itoa(nextUserCount))
-				failedMetrics[op][phase][nextUserCount] = opsFailed.WithLabelValues(op, string(phase), strconv.Itoa(nextUserCount))
-				durationMetrics[op][phase][nextUserCount] = opDuration.WithLabelValues(op, string(phase), strconv.Itoa(nextUserCount))
-			}
-		}
+		logger.Info("Starting run", zap.Int("users", nextUserCount), zap.String("duration", config.RunTime.String()))
 
 		var wg sync.WaitGroup
 		wg.Add(nextUserCount)
 		for i := 0; i < nextUserCount; i++ {
-			go runLoop(ctx, logger, w, config, sleep, i, &wg, tracer, nextUserCount)
+			go runLoop(ctx, logger, w, config, markovChain, i, &wg, tracer, nextUserCount)
 		}
 		wg.Wait()
+
+		if ctx.Err() != nil {
+			logger.Info("Run interrupted by signal, stopping", zap.Int("users", nextUserCount))
+			return
+		}
 	}
 	cancelFn()
 }
@@ -184,11 +180,6 @@ func runLoop(
 	runCtx.l = *logger
 	// todo: move this into context.value, a KV store for junk
 
-	var timeout <-chan time.Time
-	// For fixed runs, each goroutine manages its own timeout.
-	// For stepped runs, the parent `Run` function manages the duration.
-	timeout = time.After(runTime)
-
 	for {
 		select {
 		case <-ctx.Done():
@@ -211,15 +202,15 @@ func runLoop(
 		logger.Debug("next operation", zap.String("operation", nextFunction))
 
 		var t time.Duration
-		if sleep == 0 {
+		if config.Sleep == 0 {
 			// sleep a random amount of time up to 5 seconds
 			t = time.Duration(r.Int31n(5000-400)+400) * time.Millisecond
 		} else {
-			t = sleep
+			t = config.Sleep
 		}
 		time.Sleep(t)
 
-		phase := MetricState(runStart, runEnd, rampTime)
+		phase := MetricState(runStart, runEnd, config.RampTime)
 		attemptMetrics[nextFunction][phase][numUsers].Inc()
 
 		ctx2, span := tracer.Wrapped().Start(ctx, nextFunction)
