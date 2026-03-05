@@ -218,7 +218,7 @@ func startSpectroperf() {
 		logger.Fatal("failed to create markov chain", zap.Error(err))
 	}
 
-	workload.InitMetrics(w, logger)
+	workload.InitMetrics(logger, w, execConfig.NumUsers)
 
 	logger.Info("Setting up for workload", zap.String("workload", config.Workload))
 
@@ -242,7 +242,7 @@ func startSpectroperf() {
 	logger.Info("scraping operation metrics from prometheus to write to file")
 
 	// Add a minute onto the range to make sure none of the metrics are missed.
-	timeRange := int(math.Ceil(runTime.Minutes())) + 1
+	timeRange := int(math.Ceil(execConfig.RunTime.Minutes())) + 1
 	metricSummaries := map[string]map[string]workload.OperationSummary{}
 
 	for _, numUsers := range config.NumUsers {
@@ -261,7 +261,7 @@ func startSpectroperf() {
 
 	summaryOutput := map[string]any{}
 	summaryOutput["metricSummaries"] = metricSummaries
-	summaryOutput["steadyStateDurationSecs"] = (runTime - (2 * rampTime)).Seconds()
+	summaryOutput["steadyStateDurationSecs"] = (execConfig.RunTime - (2 * execConfig.RampTime)).Seconds()
 
 	bytes, err := json.Marshal(summaryOutput)
 	if err != nil {
