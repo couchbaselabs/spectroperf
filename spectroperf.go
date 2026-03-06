@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os"
 	"sync"
 	"time"
@@ -234,42 +233,31 @@ func startSpectroperf() {
 
 	logger.Info("successfully written config file")
 
-	if !workload.PrometheusIsRunning() {
-		logger.Info("skipping writing metrics to file as prometheus is not running")
-		return
-	}
-
-	logger.Info("scraping operation metrics from prometheus to write to file")
-
-	// Add a minute onto the range to make sure none of the metrics are missed.
-	timeRange := int(math.Ceil(execConfig.RunTime.Minutes())) + 1
-	metricSummaries := map[string]map[string]workload.OperationSummary{}
-
-	for _, numUsers := range config.NumUsers {
-		opSummaries := map[string]workload.OperationSummary{}
-		for _, op := range w.Operations() {
-			summary, err := workload.SummariseOperationMetrics(op, timeRange, numUsers)
-			if err != nil {
-				logger.Warn("skipping operation due to error", zap.Error(err), zap.String("operation", op), zap.Int("users", numUsers))
-				continue
-			}
-
-			opSummaries[op] = *summary
-		}
-		metricSummaries[fmt.Sprintf("%d_users", numUsers)] = opSummaries
-	}
-
-	summaryOutput := map[string]any{}
-	summaryOutput["metricSummaries"] = metricSummaries
-	summaryOutput["steadyStateDurationSecs"] = (execConfig.RunTime - (2 * execConfig.RampTime)).Seconds()
-
-	bytes, err := json.Marshal(summaryOutput)
-	if err != nil {
-		logger.Fatal("marshalling metric summary", zap.Error(err), zap.Any("summary", summaryOutput))
+	summary := []workload.RunSummary{}
+	for _, numUsers := range execConfig.NumUsers {
+		s := workload.CreateSummary(logger, numUsers, w, execConfig.RunTime, execConfig.RampTime)
+		summary = append(summary, s)
 	}
 
 	filePath := fmt.Sprintf("%s/metrics.json", startTime)
-	if err := os.WriteFile(filePath, bytes, 0644); err != nil {
-		logger.Fatal("writing metric summary to file", zap.Error(err), zap.String("path", filePath))
+	if err := writeSummary(summary, filePath); err != nil {
+		logger.Fatal("writing summary to file", zap.Error(err), zap.String("path", filePath))
 	}
+
+	logger.Info("wrote metrics to file", zap.String("path", filePath))
+}
+
+// writeSummary marshals the summary to a pretty-printed 'metrics.json' file
+// within the startTime directory.
+func writeSummary(summary []workload.RunSummary, path string) error {
+	summaryBytes, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshalling summary: %w", err)
+	}
+
+	if err := os.WriteFile(path, summaryBytes, 0644); err != nil {
+		return fmt.Errorf("writing metric summary to file: %w", err)
+	}
+
+	return nil
 }
