@@ -255,19 +255,20 @@ func TestWriteConfig(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	cfg := &Config{
-		Connstr:     "couchbase://localhost",
-		Workload:    "test-workload",
-		NumItems:    100,
-		NumUsers:    []int{1, 2},
-		RunTime:     DefaultRunTime,
-		RampTime:    DefaultRampTime,
-		Username:    DefaultUsername,
-		Password:    DefaultPassword,
-		LogLevel:    DefaultLogLevel,
-		Bucket:      DefaultBucket,
-		Scope:       DefaultScope,
-		Collection:  DefaultCollection,
-		MarkovChain: [][]float64{{1.0, 0.0}, {0.0, 1.0}},
+		Connstr:             "couchbase://localhost",
+		Workload:            "test-workload",
+		NumItems:            100,
+		NumUsers:            []int{1, 2},
+		RunTime:             DefaultRunTime,
+		RampTime:            DefaultRampTime,
+		Username:            DefaultUsername,
+		Password:            DefaultPassword,
+		LogLevel:            DefaultLogLevel,
+		Bucket:              DefaultBucket,
+		Scope:               DefaultScope,
+		Collection:          DefaultCollection,
+		OtelExporterHeaders: "myHeader=this",
+		MarkovChain:         [][]float64{{1.0, 0.0}, {0.0, 1.0}},
 	}
 
 	defaultMarkov := [][]float64{{1.0, 0.0}, {0.0, 1.0}}
@@ -285,6 +286,7 @@ func TestWriteConfig(t *testing.T) {
 	content := string(data)
 	assert.Contains(t, content, "connstr", "expected non-default fields to be present in written config")
 	assert.Contains(t, content, "workload", "expected non-default fields to be present in written config")
+	assert.Contains(t, content, "otel-exporter-headers", "expected non-default fields to be present in written config")
 	assert.NotContains(t, content, "run-time", "expected default fields to be stripped from written config")
 	assert.NotContains(t, content, "ramp-time", "expected default fields to be stripped from written config")
 	assert.NotContains(t, content, "username", "expected default fields to be stripped from written config")
@@ -298,6 +300,7 @@ func TestWriteConfig(t *testing.T) {
 	assert.Equal(t, "couchbase://localhost", decoded.Connstr)
 	assert.Equal(t, "test-workload", decoded.Workload)
 	assert.Equal(t, 100, decoded.NumItems)
+	assert.Equal(t, "myHeader=this", decoded.OtelExporterHeaders)
 }
 
 func resetViperConfig(t *testing.T) {

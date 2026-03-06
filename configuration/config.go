@@ -56,7 +56,7 @@ type Config struct {
 	RampTime            string      `toml:"ramp-time,omitempty"`
 	OtlpEndpoint        string      `toml:"otlp-endpoint,omitempty"`
 	EnableTracing       bool        `toml:"enable-tracing,omitempty"`
-	OtelExporterHeaders string      `toml:"otel-exported-headers,omitempty"`
+	OtelExporterHeaders string      `toml:"otel-exporter-headers,omitempty"`
 	MarkovChain         [][]float64 `toml:"markov-chain"`
 	OnlyOperation       string      `toml:"only-operation,omitempty"`
 	Sleep               string      `toml:"sleep,omitempty"`
