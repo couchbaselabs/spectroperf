@@ -30,7 +30,6 @@ import (
 	"github.com/couchbaselabs/spectroperf/workload"
 	"github.com/couchbaselabs/spectroperf/workload/workloads"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -57,34 +56,9 @@ func main() {
 func init() {
 	rootCmd.Flags().StringVar(&cfgFile, "config-file", "", "path to configuration file")
 
-	configFlags := pflag.NewFlagSet("", pflag.ContinueOnError)
-	configFlags.String("connstr", "", "connection string of the cluster under test")
-	configFlags.String("dapi-connstr", "", "connection string for data api")
-	configFlags.String("username", configuration.DefaultUsername, "username for cluster under test")
-	configFlags.String("password", configuration.DefaultPassword, "password of the cluster under test")
-	configFlags.String("cert", "", "path to certificate file")
-	configFlags.Bool("tls-skip-verify", false, "skip tls certificate verification")
-	configFlags.String("log-level", configuration.DefaultLogLevel, "the log level to run at")
-	configFlags.String("workload", "", "workload name")
-	configFlags.Int("num-items", 500, "number of docs to create")
-	configFlags.IntSlice("num-users", []int{}, "number of concurrent simulated users accessing the data, can be a single value or a comma-separated list for stepped runs")
-	configFlags.String("run-time", configuration.DefaultRunTime, "total time to run the workload (e.g. '5m', '30s')")
-	configFlags.String("ramp-time", configuration.DefaultRampTime, "length of ramp-up and ramp-down periods (e.g. '1m', '30s')")
-	configFlags.String("only-operation", "", "the only operation to run from the workload")
-	configFlags.String("sleep", "", "time to sleep between operations")
-	configFlags.String("bucket", configuration.DefaultBucket, "bucket name")
-	configFlags.String("scope", configuration.DefaultScope, "scope name")
-	configFlags.String("collection", configuration.DefaultCollection, "collection name")
-	configFlags.Bool("enable-tracing", false, "enables otel tracing")
-	configFlags.String("otlp-endpoint", configuration.DefaultOtlpEndpoint, "endpoint otel traces will be exported to")
-	configFlags.String("otel-exporter-headers", "", "a comma seperated list of otel expoter headers, e.g 'header1=value1,header2=value2'")
-	configFlags.Int("dial-timeout", configuration.DefaultDialTimeout, "TCP dial timeout in seconds for DAPI HTTP clients")
-	configFlags.Int("response-header-timeout", configuration.DefaultResponseHeaderTimeout, "response header timeout in seconds for DAPI HTTP clients")
-	configFlags.Int("request-timeout", configuration.DefaultRequestTimeout, "overall request timeout in seconds for DAPI HTTP clients")
-	configFlags.Int("idle-conn-timeout", configuration.DefaultIdleConnTimeout, "idle connection timeout in seconds for DAPI HTTP clients")
+	configFlags := configuration.NewFlagSet()
 	rootCmd.Flags().AddFlagSet(configFlags)
-
-	_ = viper.BindPFlags(configFlags)
+	cobra.CheckErr(configuration.BindFlagSet(configFlags))
 }
 
 func getLogger(startTime string) (zap.AtomicLevel, *zap.Logger) {

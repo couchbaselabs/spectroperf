@@ -29,6 +29,8 @@ const (
 	DefaultResponseHeaderTimeout = 30
 	DefaultRequestTimeout        = 60
 	DefaultIdleConnTimeout       = 30
+
+	DefaultNumUsers = 500
 )
 
 // Config represents all the configuration settings for spectroperf.
@@ -54,7 +56,7 @@ type Config struct {
 	RampTime            string      `toml:"ramp-time,omitempty"`
 	OtlpEndpoint        string      `toml:"otlp-endpoint,omitempty"`
 	EnableTracing       bool        `toml:"enable-tracing,omitempty"`
-	OtelExporterHeaders string      `toml:"otel-exported-headers,omitempty"`
+	OtelExporterHeaders string      `toml:"otel-exporter-headers,omitempty"`
 	MarkovChain         [][]float64 `toml:"markov-chain"`
 	OnlyOperation       string      `toml:"only-operation,omitempty"`
 	Sleep               string      `toml:"sleep,omitempty"`
@@ -117,7 +119,8 @@ func ReadConfig(logger *zap.Logger) *Config {
 		if err == nil && singleNumUser != 0 { // singleNumUser != 0 to avoid default 0 if not set
 			numUsers = []int{singleNumUser}
 		} else if err != nil {
-			logger.Warn("failed to unmarshal num-users as single int", zap.Error(err))
+			logger.Warn("num-users not set, using default value", zap.Int("default", DefaultNumUsers))
+			numUsers = []int{DefaultNumUsers}
 		}
 	}
 	config.NumUsers = numUsers
