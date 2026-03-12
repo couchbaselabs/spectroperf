@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sync"
 	"time"
 
 	gotel "github.com/couchbase/gocb-opentelemetry"
@@ -35,7 +34,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-var wg sync.WaitGroup
 var cfgFile string
 
 var rootCmd = &cobra.Command{

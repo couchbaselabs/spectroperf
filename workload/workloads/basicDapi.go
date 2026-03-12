@@ -116,13 +116,17 @@ func (w basicDapi) executeRequest(req *http.Request) (*http.Response, error) {
 	req.SetBasicAuth(w.username, w.password)
 	resp, err := w.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute get request: %s", err.Error())
+		return nil, fmt.Errorf("failed to execute request: %s", err.Error())
 	}
 
 	if resp.StatusCode != 200 {
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-		return nil, fmt.Errorf("profile fetch returned unexpected status code %d", resp.StatusCode)
+		defer func() { _ = resp.Body.Close() }()
+		_, err = io.Copy(io.Discard, resp.Body)
+		if err != nil {
+			return nil, fmt.Errorf("failed to drain response body: %w", err)
+		}
+
+		return nil, fmt.Errorf("request returned unexpected status code %d", resp.StatusCode)
 	}
 	return resp, nil
 }

@@ -137,7 +137,10 @@ func WriteConfig(config *Config, timeStamp string, defaultMarkov [][]float64) er
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+
+	defer func() {
+		_ = f.Close()
+	}()
 
 	encoder := toml.NewEncoder(f)
 

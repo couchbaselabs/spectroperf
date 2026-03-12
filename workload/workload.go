@@ -218,7 +218,7 @@ func runLoop(
 
 		start := time.Now()
 		err := functions[operations[nextOpIndex]](ctx2, runCtx)
-		duration := time.Now().Sub(start)
+		duration := time.Since(start)
 		durationMetrics[nextFunction][phase][numUsers].Observe(float64(duration.Microseconds()) / 1000)
 
 		if err != nil {
