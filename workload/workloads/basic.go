@@ -162,11 +162,12 @@ func (w basic) fullTextSearch(ctx context.Context, rctx workload.Runctx) error {
 		return fmt.Errorf("fts query failed: %s", err.Error())
 	}
 
-	var matchingDocs []string
+	var results int
 	for matchResult.Next() {
-		row := matchResult.Row()
-		matchingDocs = append(matchingDocs, row.ID)
+		results++
 	}
+
+	w.logger.Debug("findRelatedProfiles results found", zap.Int("results", results))
 
 	err = matchResult.Err()
 	if err != nil {

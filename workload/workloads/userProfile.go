@@ -287,7 +287,10 @@ func (w userProfile) lockProfile(ctx context.Context, rctx workload.Runctx) erro
 	}
 
 	var toUd User
-	result.Content(&toUd)
+	err = result.Content(&toUd)
+	if err != nil {
+		return fmt.Errorf("could not decode profile content: %s", err.Error())
+	}
 
 	toUd.Enabled = false
 
@@ -354,11 +357,12 @@ func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runc
 		return fmt.Errorf("fts query failed: %s", err.Error())
 	}
 
-	var matchingUsers []string
+	var results int
 	for matchResult.Next() {
-		row := matchResult.Row()
-		matchingUsers = append(matchingUsers, row.ID)
+		results++
 	}
+
+	w.logger.Debug("findRelatedProfiles results found", zap.Int("results", results))
 
 	err = matchResult.Err()
 	if err != nil {

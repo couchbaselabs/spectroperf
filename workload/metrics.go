@@ -61,9 +61,9 @@ var (
 
 func MetricState(start time.Time, end time.Time, rampTime time.Duration) OperationPhase {
 	phase := Steady
-	if time.Now().Sub(start) < rampTime {
+	if time.Since(start) < rampTime {
 		phase = RampUp
-	} else if end.Sub(time.Now()) < rampTime {
+	} else if time.Until(end) < rampTime {
 		phase = RampDown
 	}
 	return phase

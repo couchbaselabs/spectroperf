@@ -49,7 +49,7 @@ func CreateMarkovChain(logger *zap.Logger, config *Config, operations []string, 
 func validateMarkovChain(logger *zap.Logger, workloadOperations int, mChain [][]float64) error {
 	logger.Info("validating Markov chain from config file")
 
-	dimensionError := fmt.Errorf("Markov chain must be square array with dimensions equal to number of workload operations")
+	dimensionError := fmt.Errorf("markov chain must be square array with dimensions equal to number of workload operations")
 
 	if len(mChain) != workloadOperations {
 		return dimensionError
@@ -63,14 +63,14 @@ func validateMarkovChain(logger *zap.Logger, workloadOperations int, mChain [][]
 		var total float64
 		for _, probability := range row {
 			if probability < 0 || probability > 1 {
-				return fmt.Errorf("Markov Chain probabilities must be between 0 and 1")
+				return fmt.Errorf("markov chain probabilities must be between 0 and 1")
 			}
 
 			total += probability
 		}
 
 		if math.Abs(total-1) > epsilon {
-			return fmt.Errorf("Markov Chain row does not sum to 1: %v", row)
+			return fmt.Errorf("markov chain row does not sum to 1: %v", row)
 		}
 	}
 
