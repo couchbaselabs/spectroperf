@@ -41,6 +41,7 @@ func TestReadConfigFromFlags(t *testing.T) {
 		ResponseHeaderTimeout: 22,
 		RequestTimeout:        33,
 		IdleConnTimeout:       44,
+		Results:               "my-run",
 		MarkovChain:           [][]float64{{0.5, 0.5}, {0.3, 0.7}},
 	}
 
@@ -68,6 +69,7 @@ func TestReadConfigFromFlags(t *testing.T) {
 	viper.Set("response-header-timeout", expected.ResponseHeaderTimeout)
 	viper.Set("request-timeout", expected.RequestTimeout)
 	viper.Set("idle-conn-timeout", expected.IdleConnTimeout)
+	viper.Set("results", expected.Results)
 	viper.Set("markov-chain", expected.MarkovChain)
 
 	logger := zaptest.NewLogger(t)
@@ -110,6 +112,7 @@ func TestReadConfigFromToml(t *testing.T) {
 		ResponseHeaderTimeout: 22,
 		RequestTimeout:        33,
 		IdleConnTimeout:       44,
+		Results:               "my-run",
 		MarkovChain:           [][]float64{{0.5, 0.5}, {0.3, 0.7}},
 	}
 
@@ -138,6 +141,7 @@ dial-timeout = 11
 response-header-timeout = 22
 request-timeout = 33
 idle-conn-timeout = 44
+results = "my-run"
 markov-chain = [[0.5, 0.5], [0.3, 0.7]]
 `
 

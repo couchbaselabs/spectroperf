@@ -61,10 +61,11 @@ type Config struct {
 	OnlyOperation       string      `toml:"only-operation,omitempty"`
 	Sleep               string      `toml:"sleep,omitempty"`
 
-	DialTimeout           int `toml:"dial-timeout,omitempty"`
-	ResponseHeaderTimeout int `toml:"response-header-timeout,omitempty"`
-	RequestTimeout        int `toml:"request-timeout,omitempty"`
-	IdleConnTimeout       int `toml:"idle-conn-timeout,omitempty"`
+	DialTimeout           int    `toml:"dial-timeout,omitempty"`
+	ResponseHeaderTimeout int    `toml:"response-header-timeout,omitempty"`
+	RequestTimeout        int    `toml:"request-timeout,omitempty"`
+	IdleConnTimeout       int    `toml:"idle-conn-timeout,omitempty"`
+	Results               string `toml:"-"`
 }
 
 func ReadConfig(logger *zap.Logger) *Config {
@@ -100,6 +101,7 @@ func ReadConfig(logger *zap.Logger) *Config {
 		ResponseHeaderTimeout: viper.GetInt("response-header-timeout"),
 		RequestTimeout:        viper.GetInt("request-timeout"),
 		IdleConnTimeout:       viper.GetInt("idle-conn-timeout"),
+		Results:               viper.GetString("results"),
 	}
 
 	// Handle NumUsers which can be a single int or a slice of ints

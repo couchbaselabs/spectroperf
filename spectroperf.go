@@ -116,22 +116,28 @@ func connectToCluster(config *configuration.Config, tracer *gotel.OpenTelemetryR
 }
 
 func startSpectroperf() {
-	startTime := time.Now().UTC().Format("2006-01-02-15:04")
-	if err := os.Mkdir(startTime, 0755); err != nil {
+	if cfgFile != "" {
+		viper.SetConfigFile(cfgFile)
+		if err := viper.ReadInConfig(); err != nil {
+			fmt.Printf("failed to load specified config file: %v\n", err)
+			return
+		}
+	}
+
+	resultsDir := time.Now().UTC().Format("2006-01-02-15:04")
+	if override := viper.GetString("results"); override != "" {
+		resultsDir = override
+	}
+
+	if err := os.MkdirAll(resultsDir, 0755); err != nil {
 		fmt.Printf("creating directory for spectroperf artefacts: %v\n", err)
 		return
 	}
 
-	logLevel, logger := getLogger(startTime)
+	logLevel, logger := getLogger(resultsDir)
 
 	if cfgFile != "" {
 		logger.Info("config file provided", zap.String("config", cfgFile))
-
-		viper.SetConfigFile(cfgFile)
-		err := viper.ReadInConfig()
-		if err != nil {
-			logger.Fatal("failed to load specified config file", zap.Error(err))
-		}
 	}
 
 	config := configuration.ReadConfig(logger)
@@ -199,7 +205,7 @@ func startSpectroperf() {
 
 	workload.Run(w, logger, execConfig, markovChain, tracer)
 
-	if err := configuration.WriteConfig(config, startTime, w.Probabilities()); err != nil {
+	if err := configuration.WriteConfig(config, resultsDir, w.Probabilities()); err != nil {
 		logger.Fatal("writing config to file", zap.Error(err))
 	}
 
@@ -211,7 +217,7 @@ func startSpectroperf() {
 		summary = append(summary, s)
 	}
 
-	filePath := fmt.Sprintf("%s/metrics.json", startTime)
+	filePath := fmt.Sprintf("%s/metrics.json", resultsDir)
 	if err := writeSummary(summary, filePath); err != nil {
 		logger.Fatal("writing summary to file", zap.Error(err), zap.String("path", filePath))
 	}
@@ -220,7 +226,7 @@ func startSpectroperf() {
 }
 
 // writeSummary marshals the summary to a pretty-printed 'metrics.json' file
-// within the startTime directory.
+// within the artifact directory.
 func writeSummary(summary []workload.RunSummary, path string) error {
 	summaryBytes, err := json.MarshalIndent(summary, "", "  ")
 	if err != nil {

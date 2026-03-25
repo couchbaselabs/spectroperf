@@ -35,6 +35,7 @@ func NewFlagSet() *pflag.FlagSet {
 	flagSet.Int("response-header-timeout", DefaultResponseHeaderTimeout, "response header timeout in seconds for DAPI HTTP clients")
 	flagSet.Int("request-timeout", DefaultRequestTimeout, "overall request timeout in seconds for DAPI HTTP clients")
 	flagSet.Int("idle-conn-timeout", DefaultIdleConnTimeout, "idle connection timeout in seconds for DAPI HTTP clients")
+	flagSet.String("results", "", "override the results directory path (relative or absolute; defaults to directory named with run start timestamp)")
 
 	return flagSet
 }
