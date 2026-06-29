@@ -370,6 +370,14 @@ func EnsureBasicFtsIndex(logger *zap.Logger, cluster *gocb.Cluster) error {
 		PlanParams:   nil,
 	}, nil)
 	if err != nil {
+		// The index gets stored under a scoped name, so the GetIndex check
+		// above can miss it. If the create says the index already exists, that
+		// is fine, so we just move on. This keeps the setup safe to run again
+		// and lets more than one workload pod share the same bucket.
+		if strings.Contains(err.Error(), "index exists") || strings.Contains(err.Error(), "already exists") {
+			logger.Info("fts index already exists, skipping creation", zap.String("name", indexName))
+			return nil
+		}
 		return err
 	}
 
