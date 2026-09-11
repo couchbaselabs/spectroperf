@@ -56,13 +56,50 @@ go test ./workload/workloads/ -run TestWorkloadConformance -v
 
 or run the whole suite with `make test`.
 
-**Do not report a new or modified workload as complete until this test passes.** If it
-fails, fix the workload rather than the test; the assertions encode what the runner in
-`workload/workload.go` actually requires.
+**Do not report a new or modified workload as complete until this test passes and the smoke
+runs below come back clean.** If the test fails, fix the workload rather than the test; the
+assertions encode what the runner in `workload/workload.go` actually requires.
 
 A new workload needs no Grafana dashboard changes: the panels are driven by an `$operation`
 variable populated from `label_values(operations_total, operation)`, so a new workload's
 operations appear on their own once it runs.
+
+## Validating a new workload
+
+`TestWorkloadConformance` is structural only. It runs without a cluster, so it can tell you
+that `Probabilities` is square and sums to 1, that `Functions` and `Operations` agree and that
+names are unique - and nothing else. It cannot tell you that `GenerateDocument` produces the
+fields the operations query on, that an index exists and is populated, or that a query matches
+anything. A workload can pass it while measuring nothing at all, so do not treat a green test
+as evidence the operations work.
+
+To check the implementation, smoke each operation on its own against a real cluster:
+
+```
+./spectroperf --config-file ./configs/my-cluster.toml --workload <name> \
+  --only-operation <operation> --run-time 10s --log-level debug --results smoke-<operation>
+```
+
+Then check both signals, because either on its own is misleading:
+
+- `smoke-<operation>/metrics.json` - the operation's `total` must be above zero and `failed`
+  must be zero. Zero failures against zero total just means the operation never ran.
+- `smoke-<operation>/spectroperf.log` - every read operation logs `operation results` with a
+  `results` count:
+
+  ```
+  grep '"msg":"operation results"' smoke-<operation>/spectroperf.log
+  ```
+
+  A count of zero on every call means the operation succeeded without matching anything: a
+  mistyped field name, an index that is not populated, or a query type that cannot match what
+  was written. This failure mode reports no errors and looks perfect on the dashboard, so it
+  is only visible here.
+
+`--only-operation` also logs `skipping local summary due to error` for each operation that did
+not run. That is expected in this mode and is not a failure.
+
+Run the full workload only once every operation passes its own smoke run.
 
 ## Running a workload
 

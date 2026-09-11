@@ -131,18 +131,23 @@ func (w basic) query(ctx context.Context, rctx workload.Runctx) error {
 		return fmt.Errorf("query operation failed: %s", err.Error())
 	}
 
+	var results int
 	for rows.Next() {
 		var resp UserQueryResponse
 		err := rows.Row(&resp)
 		if err != nil {
 			return fmt.Errorf("reading next row: %s", err.Error())
 		}
+		results++
 	}
 
 	err = rows.Err()
 	if err != nil {
 		return fmt.Errorf("iterating rows: %s", err.Error())
 	}
+
+	w.logger.Debug("operation results", zap.String("operation", "query"), zap.Int("results", results))
+
 	return nil
 }
 
@@ -150,9 +155,11 @@ func (w basic) fullTextSearch(ctx context.Context, rctx workload.Runctx) error {
 	span := trace.SpanFromContext(ctx)
 	toFind := fmt.Sprintf("%s*", gofakeit.Letter())
 
+	// A match query analyses its input, so the trailing asterisk is treated as a literal
+	// character and never matches the single-token random strings this workload writes.
 	matchResult, err := w.cluster.SearchQuery(
 		"rand-string-index",
-		search.NewMatchQuery(toFind),
+		search.NewWildcardQuery(toFind),
 		&gocb.SearchOptions{
 			ParentSpan: gotel.NewOpenTelemetryRequestSpan(ctx, span),
 		},
@@ -167,7 +174,7 @@ func (w basic) fullTextSearch(ctx context.Context, rctx workload.Runctx) error {
 		results++
 	}
 
-	w.logger.Debug("findRelatedProfiles results found", zap.Int("results", results))
+	w.logger.Debug("operation results", zap.String("operation", "fullTextSearch"), zap.Int("results", results))
 
 	err = matchResult.Err()
 	if err != nil {

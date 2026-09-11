@@ -340,6 +340,9 @@ func (w userProfileDapi) findProfile(ctx context.Context, rctx workload.Runctx) 
 	if err != nil {
 		return fmt.Errorf("could not unmarshal response body - %s : %s", string(bodyBytes), err.Error())
 	}
+
+	w.logger.Debug("operation results", zap.String("operation", "findProfile"), zap.Int("results", len(results.Results)))
+
 	return nil
 }
 
@@ -399,6 +402,8 @@ func (w userProfileDapi) findRelatedProfiles(ctx context.Context, rctx workload.
 	if err != nil {
 		return fmt.Errorf("could not unmarshal response body - %s : %s", string(bodyBytes), err.Error())
 	}
+
+	w.logger.Debug("operation results", zap.String("operation", "findRelatedProfiles"), zap.Int("results", len(results.Results)))
 
 	return nil
 }

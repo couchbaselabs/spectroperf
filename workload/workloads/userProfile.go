@@ -332,18 +332,23 @@ func (w userProfile) findProfile(ctx context.Context, rctx workload.Runctx) erro
 		return fmt.Errorf("query failed: %s", err.Error())
 	}
 
+	var results int
 	for rows.Next() {
 		var resp UserQueryResponse
 		err := rows.Row(&resp)
 		if err != nil {
 			return fmt.Errorf("could not read next row: %s", err.Error())
 		}
+		results++
 	}
 
 	err = rows.Err()
 	if err != nil {
 		return fmt.Errorf("error iterating the rows: %s", err.Error())
 	}
+
+	w.logger.Debug("operation results", zap.String("operation", "findProfile"), zap.Int("results", results))
+
 	return nil
 }
 
@@ -370,7 +375,7 @@ func (w userProfile) findRelatedProfiles(ctx context.Context, rctx workload.Runc
 		results++
 	}
 
-	w.logger.Debug("findRelatedProfiles results found", zap.Int("results", results))
+	w.logger.Debug("operation results", zap.String("operation", "findRelatedProfiles"), zap.Int("results", results))
 
 	err = matchResult.Err()
 	if err != nil {

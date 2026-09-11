@@ -235,6 +235,9 @@ func (w basicDapi) query(ctx context.Context, rctx workload.Runctx) error {
 	if err != nil {
 		return fmt.Errorf("unmarshalling response body - %s : %s", string(bodyBytes), err.Error())
 	}
+
+	w.logger.Debug("operation results", zap.String("operation", "query"), zap.Int("results", len(results.Results)))
+
 	return nil
 }
 
@@ -284,7 +287,7 @@ func (w basicDapi) fullTextSearch(ctx context.Context, rctx workload.Runctx) err
 		matchingDocs = append(matchingDocs, result.Id)
 	}
 
-	rctx.Logger().Sugar().Debugf("Found %d docs matching %s\n", len(matchingDocs), toFind)
+	w.logger.Debug("operation results", zap.String("operation", "fullTextSearch"), zap.Int("results", len(matchingDocs)))
 
 	return nil
 }
