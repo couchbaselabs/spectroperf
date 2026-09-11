@@ -1,0 +1,42 @@
+# Prometheus and Grafana, pre-wired to scrape spectroperf and serve the
+# dashboard in Grafana_dashboard.json. Start it with `make monitoring`.
+#
+# spectroperf itself is deliberately not in here: it is the thing you iterate
+# on, so it stays a host binary you can rebuild and rerun without touching the
+# monitoring stack. Prometheus reaches it on the host via host.docker.internal.
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    container_name: spectroperf-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    extra_hosts:
+      # Docker Desktop provides this automatically; Linux needs it spelled out.
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.6.6
+    container_name: spectroperf-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./Grafana_dashboard.json:/var/lib/grafana/dashboards/spectroperf.json:ro
+      - grafana-data:/var/lib/grafana
+    environment:
+      # No login prompt: anyone opening localhost:3000 lands on the dashboard.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/spectroperf.json
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+volumes:
+  prometheus-data:
+  grafana-data:

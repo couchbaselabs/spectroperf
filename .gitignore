@@ -24,10 +24,13 @@
 /direct/
 /gateway/
 
-# Local example configs. These hold real cluster endpoints, passwords and API
-# keys, so they are kept out of the repo. See the Config file section of
-# README.md for the format. Remove this entry only once they are sanitised.
-/configs/
+# Local configs. These hold real cluster endpoints, passwords and API keys, so
+# they are kept out of the repo. See the Config file section of README.md for
+# the format. The directory contents are ignored rather than the directory
+# itself, because git cannot re-include a file inside an excluded directory -
+# and configs/example.toml is deliberately tracked as a sanitised starting point.
+/configs/*
+!/configs/example.toml
 
 # Python virtualenv
 /venv/

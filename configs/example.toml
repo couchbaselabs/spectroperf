@@ -1,0 +1,46 @@
+# Sanitised example config: copy this, point it at your own cluster, and pass the
+# copy with --config-file. Never commit a config holding a real endpoint or
+# password - everything else in this directory is gitignored for that reason.
+#
+#   ./spectroperf --config-file ./configs/my-cluster.toml
+#
+# Keys use the same names as the command line flags and flags take precedence, so
+# a saved config can be reused with one setting overridden:
+#
+#   ./spectroperf --config-file ./configs/my-cluster.toml --num-users 100
+#
+# A key that does not match a flag name is ignored silently rather than erroring,
+# so check spelling against --help if a setting seems to have no effect.
+
+# Cluster under test. Use couchbases:// for a TLS-enabled cluster, and set
+# tls-skip-verify when it serves a self-signed certificate.
+connstr = "couchbase://localhost"
+username = "Administrator"
+password = "password"
+# tls-skip-verify = false
+
+# These must already exist on the cluster; spectroperf does not create them.
+bucket = "data"
+scope = "identity"
+collection = "profiles"
+
+# One of: basic, basic-dapi, user-profile, user-profile-dapi.
+# The DAPI variants also need dapi-connstr set.
+workload = "basic"
+
+# Concurrent simulated users: a single integer, or an array such as
+# [100, 200, 400] to run the workload once per step.
+num-users = 20
+
+# Documents written during setup, before the run starts.
+num-items = 500
+
+# Durations always need a unit ("30s", "5m"). A bare integer such as 5 is read as
+# the string "5" and fatals at startup with: missing unit in duration "5".
+# ramp-time is the length of each of the ramp-up and ramp-down phases, which the
+# Grafana dashboard reports separately from the steady phase.
+run-time = "5m"
+ramp-time = "30s"
+
+# Time to sleep between operations. Omit for a random sleep per operation.
+# sleep = "1s"

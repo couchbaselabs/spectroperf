@@ -60,6 +60,39 @@ or run the whole suite with `make test`.
 fails, fix the workload rather than the test; the assertions encode what the runner in
 `workload/workload.go` actually requires.
 
+A new workload needs no Grafana dashboard changes: the panels are driven by an `$operation`
+variable populated from `label_values(operations_total, operation)`, so a new workload's
+operations appear on their own once it runs.
+
+## Running a workload
+
+Start from `configs/example.toml`, the only config tracked in the repo. Copy it, set `connstr`
+and the credentials of the cluster under test, and pass the copy with `--config-file`:
+
+```
+./spectroperf --config-file ./configs/my-cluster.toml
+```
+
+Leave the example itself untouched, and never commit a config holding a real endpoint or
+password: everything else under `configs/` is gitignored for exactly that reason. Flags take
+precedence over config file keys, so one saved config covers repeated runs with a single
+setting varied (`--num-users 100`).
+
+The bucket, scope and collection named in the config must already exist - spectroperf does not
+create them, and a run against a missing one fails at setup. Workloads do create their own
+query and FTS indexes during `Setup`, so those need no preparation.
+
+Start `make monitoring` before the run to watch it live in Grafana. A run started with
+`--results <name>` writes its artefacts to `<name>/`, which needs adding to `.gitignore`.
+
+## Monitoring
+
+`make monitoring` starts Prometheus and Grafana in containers, pre-wired to scrape spectroperf
+and serve `Grafana_dashboard.json` (Grafana on :3000 with no login, Prometheus on :9090). Docker
+is the only prerequisite. Spectroperf stays a host binary, so Prometheus scrapes it at
+`host.docker.internal:2112`; the stack is `docker-compose.yml` plus `monitoring/`.
+`make monitoring-down` stops it, `make monitoring-clean` also drops the scraped metrics.
+
 ## Configuration gotchas
 
 - `run-time`, `ramp-time` and `sleep` are duration strings parsed with `time.ParseDuration`, so

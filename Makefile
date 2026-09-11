@@ -16,3 +16,21 @@ lint:
 
 check: lint
 	go test -short -cover -race ./...
+
+# Declared phony: the monitoring/ directory would otherwise satisfy these targets.
+.PHONY: monitoring monitoring-down monitoring-logs monitoring-clean
+
+monitoring:
+	docker compose up -d
+	@echo "Grafana:    http://localhost:3000 (the dashboard is the home page)"
+	@echo "Prometheus: http://localhost:9090"
+
+monitoring-down:
+	docker compose down
+
+monitoring-logs:
+	docker compose logs -f
+
+# Also discards the scraped metrics and any dashboard edits made in the UI.
+monitoring-clean:
+	docker compose down -v
