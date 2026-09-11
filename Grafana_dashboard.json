@@ -87,20 +87,13 @@
                 "type": "prometheus",
                 "uid": "ce37u7dod83cwa"
               },
-              "disableTextWrap": false,
               "editorMode": "code",
-              "exemplar": false,
-              "expr": "increase(operations_total{phase=\"Steady\"}[$__range])",
-              "format": "time_series",
-              "fullMetaSearch": false,
+              "expr": "increase(operations_total{operation=~\"$operation\", phase=\"Steady\"}[$__range])",
               "hide": false,
-              "includeNullMetadata": true,
               "instant": false,
-              "interval": "",
               "legendFormat": "{{operation}}",
               "range": true,
-              "refId": "A",
-              "useBackend": false
+              "refId": "A"
             }
           ],
           "title": "Total operations",
@@ -162,19 +155,13 @@
                 "type": "prometheus",
                 "uid": "ce37u7dod83cwa"
               },
-              "disableTextWrap": false,
               "editorMode": "code",
-              "exemplar": false,
-              "expr": "increase(operations_failed_total{job=\"spectroperf\", phase=\"Steady\"}[$__range])",
-              "format": "time_series",
-              "fullMetaSearch": false,
+              "expr": "increase(operations_failed_total{job=\"spectroperf\", operation=~\"$operation\", phase=\"Steady\"}[$__range])",
               "hide": false,
-              "includeNullMetadata": true,
               "instant": false,
               "legendFormat": "{{operation}}",
               "range": true,
-              "refId": "A",
-              "useBackend": false
+              "refId": "A"
             }
           ],
           "title": "Failed operations",
@@ -182,6 +169,7 @@
         },
         {
           "datasource": {
+            "type": "prometheus",
             "uid": "ce37u7dod83cwa"
           },
           "fieldConfig": {
@@ -233,9 +221,15 @@
           "pluginVersion": "11.3.0-pre",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ce37u7dod83cwa"
+              },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"fetchProfile\",phase=\"Steady\"}[$__range])) by (le))",
-              "legendFormat": "fetchProfile",
+              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le, operation))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{operation}}",
               "range": true,
               "refId": "A"
             },
@@ -245,51 +239,12 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "updateProfile",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "lockProfile",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"findProfile\",phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "findProfile",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{phase=\"Steady\"}[$__range])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le))",
               "hide": false,
               "instant": false,
               "legendFormat": "all operations",
               "range": true,
-              "refId": "E"
+              "refId": "B"
             }
           ],
           "title": "99th percentile operation duration",
@@ -297,6 +252,7 @@
         },
         {
           "datasource": {
+            "type": "prometheus",
             "uid": "ce37u7dod83cwa"
           },
           "fieldConfig": {
@@ -348,9 +304,15 @@
           "pluginVersion": "11.3.0-pre",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ce37u7dod83cwa"
+              },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"fetchProfile\",phase=\"Steady\"}[$__range])) by (le))",
-              "legendFormat": "fetchProfile",
+              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le, operation))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{operation}}",
               "range": true,
               "refId": "A"
             },
@@ -360,51 +322,12 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "updateProfile",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "lockProfile",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"findProfile\",phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "findProfile",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{phase=\"Steady\"}[$__range])) by (le))",
+              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le))",
               "hide": false,
               "instant": false,
               "legendFormat": "all operations",
               "range": true,
-              "refId": "E"
+              "refId": "B"
             }
           ],
           "title": "50th percentile operation duration",
@@ -497,7 +420,7 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "rate(operations_total{phase=\"Steady\"}[1m])",
+              "expr": "rate(operations_total{operation=~\"$operation\", phase=\"Steady\"}[1m])",
               "hide": false,
               "instant": false,
               "legendFormat": "{{operation}}",
@@ -510,7 +433,7 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "sum(rate(operations_total{phase=\"Steady\"}[1m]))",
+              "expr": "sum(rate(operations_total{operation=~\"$operation\", phase=\"Steady\"}[1m]))",
               "hide": false,
               "instant": false,
               "legendFormat": "Total",
@@ -555,6 +478,7 @@
             "y": 94
           },
           "id": 1,
+          "maxPerRow": 2,
           "options": {
             "displayMode": "basic",
             "legend": {
@@ -580,6 +504,8 @@
             "valueMode": "color"
           },
           "pluginVersion": "11.3.0-pre",
+          "repeat": "operation",
+          "repeatDirection": "h",
           "targets": [
             {
               "datasource": {
@@ -588,7 +514,7 @@
               },
               "disableTextWrap": false,
               "editorMode": "code",
-              "expr": "operation_duration_milliseconds_bucket{operation=\"fetchProfile\", phase=\"Steady\"}",
+              "expr": "operation_duration_milliseconds_bucket{operation=\"$operation\", phase=\"Steady\"}",
               "format": "heatmap",
               "fullMetaSearch": false,
               "hide": false,
@@ -600,253 +526,7 @@
               "useBackend": false
             }
           ],
-          "title": "Fetch Profile Duration",
-          "type": "bargauge"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 94
-          },
-          "id": 2,
-          "options": {
-            "displayMode": "basic",
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": false
-            },
-            "maxVizHeight": 300,
-            "minVizHeight": 16,
-            "minVizWidth": 0,
-            "namePlacement": "auto",
-            "orientation": "vertical",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showUnfilled": true,
-            "sizing": "auto",
-            "valueMode": "color"
-          },
-          "pluginVersion": "11.3.0-pre",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "disableTextWrap": false,
-              "editorMode": "code",
-              "expr": "operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"Steady\"}",
-              "format": "heatmap",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "instant": false,
-              "legendFormat": "__auto",
-              "range": true,
-              "refId": "A",
-              "useBackend": false
-            }
-          ],
-          "title": "Lock Profile Duration",
-          "type": "bargauge"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 102
-          },
-          "id": 3,
-          "options": {
-            "displayMode": "basic",
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": false
-            },
-            "maxVizHeight": 300,
-            "minVizHeight": 16,
-            "minVizWidth": 0,
-            "namePlacement": "auto",
-            "orientation": "vertical",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showUnfilled": true,
-            "sizing": "auto",
-            "valueMode": "color"
-          },
-          "pluginVersion": "11.3.0-pre",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "disableTextWrap": false,
-              "editorMode": "code",
-              "expr": "operation_duration_milliseconds_bucket{operation=\"findProfile\", phase=\"Steady\"}",
-              "format": "heatmap",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "instant": false,
-              "legendFormat": "__auto",
-              "range": true,
-              "refId": "A",
-              "useBackend": false
-            }
-          ],
-          "title": "Find Profile Duration",
-          "type": "bargauge"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
-          },
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green"
-                  },
-                  {
-                    "color": "red",
-                    "value": 80
-                  }
-                ]
-              },
-              "unit": "none"
-            },
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 102
-          },
-          "id": 4,
-          "options": {
-            "displayMode": "basic",
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom",
-              "showLegend": false
-            },
-            "maxVizHeight": 300,
-            "minVizHeight": 16,
-            "minVizWidth": 0,
-            "namePlacement": "auto",
-            "orientation": "vertical",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            },
-            "showUnfilled": true,
-            "sizing": "auto",
-            "valueMode": "color"
-          },
-          "pluginVersion": "11.3.0-pre",
-          "targets": [
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "disableTextWrap": false,
-              "editorMode": "code",
-              "expr": "operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"Steady\"}",
-              "format": "heatmap",
-              "fullMetaSearch": false,
-              "hide": false,
-              "includeNullMetadata": true,
-              "instant": false,
-              "legendFormat": "__auto",
-              "range": true,
-              "refId": "A",
-              "useBackend": false
-            }
-          ],
-          "title": "Update Profile Duration",
+          "title": "$operation duration",
           "type": "bargauge"
         }
       ],
@@ -919,20 +599,13 @@
                 "type": "prometheus",
                 "uid": "ce37u7dod83cwa"
               },
-              "disableTextWrap": false,
               "editorMode": "code",
-              "exemplar": false,
-              "expr": "increase(operations_total{phase=\"RampUp\"}[$__range])",
-              "format": "time_series",
-              "fullMetaSearch": false,
+              "expr": "increase(operations_total{operation=~\"$operation\", phase=\"RampUp\"}[$__range])",
               "hide": false,
-              "includeNullMetadata": true,
               "instant": false,
-              "interval": "",
               "legendFormat": "{{operation}}",
               "range": true,
-              "refId": "A",
-              "useBackend": false
+              "refId": "A"
             }
           ],
           "title": "Total operations",
@@ -994,19 +667,13 @@
                 "type": "prometheus",
                 "uid": "ce37u7dod83cwa"
               },
-              "disableTextWrap": false,
               "editorMode": "code",
-              "exemplar": false,
-              "expr": "increase(operations_failed_total{job=\"spectroperf\", phase=\"RampUp\"}[$__range])",
-              "format": "time_series",
-              "fullMetaSearch": false,
+              "expr": "increase(operations_failed_total{job=\"spectroperf\", operation=~\"$operation\", phase=\"RampUp\"}[$__range])",
               "hide": false,
-              "includeNullMetadata": true,
               "instant": false,
               "legendFormat": "{{operation}}",
               "range": true,
-              "refId": "A",
-              "useBackend": false
+              "refId": "A"
             }
           ],
           "title": "Failed operations",
@@ -1014,6 +681,7 @@
         },
         {
           "datasource": {
+            "type": "prometheus",
             "uid": "ce37u7dod83cwa"
           },
           "fieldConfig": {
@@ -1065,9 +733,15 @@
           "pluginVersion": "11.3.0-pre",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ce37u7dod83cwa"
+              },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"fetchProfile\",phase=\"RampUp\"}[$__range])) by (le))",
-              "legendFormat": "fetchProfile",
+              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le, operation))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{operation}}",
               "range": true,
               "refId": "A"
             },
@@ -1077,51 +751,12 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"RampUp\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "updateProfile",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"RampUp\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "lockProfile",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"findProfile\",phase=\"RampUp\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "findProfile",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{phase=\"RampUp\"}[$__range])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le))",
               "hide": false,
               "instant": false,
               "legendFormat": "all operations",
               "range": true,
-              "refId": "E"
+              "refId": "B"
             }
           ],
           "title": "99th percentile operation duration",
@@ -1129,6 +764,7 @@
         },
         {
           "datasource": {
+            "type": "prometheus",
             "uid": "ce37u7dod83cwa"
           },
           "fieldConfig": {
@@ -1180,9 +816,15 @@
           "pluginVersion": "11.3.0-pre",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ce37u7dod83cwa"
+              },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"fetchProfile\",phase=\"Steady\"}[$__range])) by (le))",
-              "legendFormat": "fetchProfile",
+              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le, operation))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{operation}}",
               "range": true,
               "refId": "A"
             },
@@ -1192,51 +834,12 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "updateProfile",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "lockProfile",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"findProfile\",phase=\"Steady\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "findProfile",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{phase=\"Steady\"}[$__range])) by (le))",
+              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le))",
               "hide": false,
               "instant": false,
               "legendFormat": "all operations",
               "range": true,
-              "refId": "E"
+              "refId": "B"
             }
           ],
           "title": "50th percentile operation duration",
@@ -1329,7 +932,7 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "rate(operations_total{phase=\"RampUp\"}[1m])",
+              "expr": "rate(operations_total{operation=~\"$operation\", phase=\"RampUp\"}[1m])",
               "hide": false,
               "instant": false,
               "legendFormat": "{{operation}}",
@@ -1342,7 +945,7 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "sum(rate(operations_total{phase=\"RampUp\"}[1m]))",
+              "expr": "sum(rate(operations_total{operation=~\"$operation\", phase=\"RampUp\"}[1m]))",
               "hide": false,
               "instant": false,
               "legendFormat": "Total",
@@ -1424,20 +1027,13 @@
                 "type": "prometheus",
                 "uid": "ce37u7dod83cwa"
               },
-              "disableTextWrap": false,
               "editorMode": "code",
-              "exemplar": false,
-              "expr": "increase(operations_total{phase=\"RampDown\"}[$__range])",
-              "format": "time_series",
-              "fullMetaSearch": false,
+              "expr": "increase(operations_total{operation=~\"$operation\", phase=\"RampDown\"}[$__range])",
               "hide": false,
-              "includeNullMetadata": true,
               "instant": false,
-              "interval": "",
               "legendFormat": "{{operation}}",
               "range": true,
-              "refId": "A",
-              "useBackend": false
+              "refId": "A"
             }
           ],
           "title": "Total operations",
@@ -1500,19 +1096,13 @@
                 "type": "prometheus",
                 "uid": "ce37u7dod83cwa"
               },
-              "disableTextWrap": false,
               "editorMode": "code",
-              "exemplar": false,
-              "expr": "increase(operations_failed_total{job=\"spectroperf\", phase=\"RampDown\"}[$__range])",
-              "format": "time_series",
-              "fullMetaSearch": false,
+              "expr": "increase(operations_failed_total{job=\"spectroperf\", operation=~\"$operation\", phase=\"RampDown\"}[$__range])",
               "hide": false,
-              "includeNullMetadata": true,
               "instant": false,
               "legendFormat": "{{operation}}",
               "range": true,
-              "refId": "A",
-              "useBackend": false
+              "refId": "A"
             }
           ],
           "title": "Failed operations",
@@ -1520,6 +1110,7 @@
         },
         {
           "datasource": {
+            "type": "prometheus",
             "uid": "ce37u7dod83cwa"
           },
           "fieldConfig": {
@@ -1572,9 +1163,15 @@
           "pluginVersion": "11.3.0-pre",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ce37u7dod83cwa"
+              },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"fetchProfile\",phase=\"RampDown\"}[$__range])) by (le))",
-              "legendFormat": "fetchProfile",
+              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le, operation))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{operation}}",
               "range": true,
               "refId": "A"
             },
@@ -1584,51 +1181,12 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"RampDown\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "updateProfile",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"RampDown\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "lockProfile",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=\"findProfile\",phase=\"RampDown\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "findProfile",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{phase=\"RampDown\"}[$__range])) by (le))",
+              "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le))",
               "hide": false,
               "instant": false,
               "legendFormat": "all operations",
               "range": true,
-              "refId": "E"
+              "refId": "B"
             }
           ],
           "title": "99th percentile operation duration",
@@ -1636,6 +1194,7 @@
         },
         {
           "datasource": {
+            "type": "prometheus",
             "uid": "ce37u7dod83cwa"
           },
           "fieldConfig": {
@@ -1688,9 +1247,15 @@
           "pluginVersion": "11.3.0-pre",
           "targets": [
             {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "ce37u7dod83cwa"
+              },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"fetchProfile\",phase=\"RampDown\"}[$__range])) by (le))",
-              "legendFormat": "fetchProfile",
+              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le, operation))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{operation}}",
               "range": true,
               "refId": "A"
             },
@@ -1700,51 +1265,12 @@
                 "uid": "ce37u7dod83cwa"
               },
               "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"updateProfile\", phase=\"RampDown\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "updateProfile",
-              "range": true,
-              "refId": "B"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"lockProfile\", phase=\"RampDown\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "lockProfile",
-              "range": true,
-              "refId": "C"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=\"findProfile\",phase=\"RampDown\"}[$__range])) by (le))",
-              "hide": false,
-              "instant": false,
-              "legendFormat": "findProfile",
-              "range": true,
-              "refId": "D"
-            },
-            {
-              "datasource": {
-                "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
-              },
-              "editorMode": "code",
-              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{phase=\"RampDown\"}[$__range])) by (le))",
+              "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le))",
               "hide": false,
               "instant": false,
               "legendFormat": "all operations",
               "range": true,
-              "refId": "E"
+              "refId": "B"
             }
           ],
           "title": "50th percentile operation duration",
@@ -1759,7 +1285,38 @@
   "schemaVersion": 40,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "ce37u7dod83cwa"
+        },
+        "definition": "label_values(operations_total, operation)",
+        "includeAll": true,
+        "label": "Operation",
+        "multi": true,
+        "name": "operation",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(operations_total, operation)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
   },
   "time": {
     "from": "now-15m",

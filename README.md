@@ -247,6 +247,13 @@ The dashboard is split into three sections `ramp-up`, `steady` and `ramp-down`, 
 `phase` label on the metrics. The `ramp-up` phase is the first `ramp-time` of the workload and
 `ramp-down` is the last `ramp-time`, with `steady` being the time in between. With the default
 `ramp-time` of `0m` there is no ramp at all and everything is reported as `steady`. 
+
+Every panel is driven by an `Operation` dashboard variable, whose values come from
+`label_values(operations_total, operation)` - i.e. from whatever the running workload actually
+reports. Adding a workload, or an operation to an existing one, needs no dashboard changes: the
+new operation appears in the variable picker, in the per-operation percentile panels and as its
+own repeated duration panel. Use the picker to narrow the dashboard to a subset of operations.
+
 Feel free to edit the dashboard to perform the analysis required, this definition was just given as a starting point. 
 
 ## Artifacts
