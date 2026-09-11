@@ -23,7 +23,7 @@ type basic struct {
 	cluster    *gocb.Cluster
 }
 
-func NewBasic(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) basic {
+func NewBasic(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) workload.Workload {
 	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
 
 	return basic{
