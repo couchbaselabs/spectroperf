@@ -81,6 +81,9 @@ go run spectroperf.go --connstr <cluster-connection-string> --workload user-prof
 
 This will run Spectroperf against the given cluster, with the user-profile workload with default settings for all optional flags. 
 
+For repeated runs, build the binary once with `make build` and invoke `./spectroperf` with the
+same flags instead of `go run`.
+
 ### Flags 
 
 The optional flags are as follows: 
@@ -113,7 +116,7 @@ The optional flags are as follows:
       --tls-skip-verify                skip tls certificate verification
       --username string                username for cluster under test (default "Administrator")
   -v, --version                        version for spectroperf
-      --workload string                workload name
+      --workload string                workload to run, one of: basic, basic-dapi, user-profile, user-profile-dapi
 ```
 
 A few of these are easy to get wrong:

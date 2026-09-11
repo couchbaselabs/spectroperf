@@ -66,8 +66,9 @@ operations appear on their own once it runs.
 
 ## Running a workload
 
-Start from `configs/example.toml`, the only config tracked in the repo. Copy it, set `connstr`
-and the credentials of the cluster under test, and pass the copy with `--config-file`:
+Build the binary with `make build`, then start from `configs/example.toml`, the only config
+tracked in the repo. Copy it, set `connstr` and the credentials of the cluster under test, and
+pass the copy with `--config-file`:
 
 ```
 ./spectroperf --config-file ./configs/my-cluster.toml

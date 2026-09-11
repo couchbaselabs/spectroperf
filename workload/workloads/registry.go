@@ -23,14 +23,27 @@ var registry = map[string]Constructor{
 	"user-profile-dapi": NewUserProfileDapi,
 }
 
-// New builds the named workload, returning an error if no workload is registered under that name.
-func New(name string, logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) (workload.Workload, error) {
-	construct, ok := registry[name]
-	if !ok {
-		return nil, fmt.Errorf("unknown workload %q, expected one of %v", name, Names())
+// Validate reports whether a workload is registered under the given name. It needs no
+// cluster, so the caller can reject a bad --workload before anything is dialled.
+func Validate(name string) error {
+	if name == "" {
+		return fmt.Errorf("no workload specified, expected one of %v", Names())
 	}
 
-	return construct(logger, config, cluster), nil
+	if _, ok := registry[name]; !ok {
+		return fmt.Errorf("unknown workload %q, expected one of %v", name, Names())
+	}
+
+	return nil
+}
+
+// New builds the named workload, returning an error if no workload is registered under that name.
+func New(name string, logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) (workload.Workload, error) {
+	if err := Validate(name); err != nil {
+		return nil, err
+	}
+
+	return registry[name](logger, config, cluster), nil
 }
 
 // Names returns the registered workload names in alphabetical order.
