@@ -7,16 +7,20 @@ This repository defines a workload generation tool called spectroperf.
 - Do as little work as possible to achieve the task at hand
 - Before making code changes propose the steps and get my review
 - When discussing a task ask before proposing any edits to files
-- Do not be overly agreeable, critisise my suggestions if there appear to be issues
+- Do not be overly agreeable, criticise my suggestions if there appear to be issues
 - Do not use underscores in function or variable names
-- When writing tests use the assert librar y to establish success
+- When writing tests use the assert library to establish success
 
 ## Project Layout (High-level)
 
 - spectroperf.go in root package reads the config and orchestrates the workload
-- *.go files in workloads contain generic files for running different mixes of operations against a couchbase cluster
-- workload/workloads contains a set of workloads, each consisting of a mix of operations and a markov chain defining the probabilities of each operation 
-- configuration/config.go holds the code responsible for parsing the config file and flags
+- workload/*.go holds the generic machinery for running any workload: workload.go (the runner and
+  the Workload interface), metrics.go (prometheus metrics plus the HDR histograms behind
+  metrics.json), tracing.go and utils.go
+- workload/workloads contains a set of workloads, each consisting of a mix of operations and a markov chain defining the probabilities of each operation
+- configuration/ holds config parsing: config.go (config file and flags), flags.go (flag
+  definitions and defaults), executionConfig.go (validation and duration parsing) and markov.go
+  (markov chain selection and validation)
 
 ## Adding a workload
 
@@ -55,6 +59,17 @@ or run the whole suite with `make test`.
 **Do not report a new or modified workload as complete until this test passes.** If it
 fails, fix the workload rather than the test; the assertions encode what the runner in
 `workload/workload.go` actually requires.
+
+## Configuration gotchas
+
+- `run-time`, `ramp-time` and `sleep` are duration strings parsed with `time.ParseDuration`, so
+  they always need a unit (`"30s"`, `"5m"`). A bare TOML integer such as `run-time = 12` is read
+  as the string `"12"` and fatals at startup with `missing unit in duration "12"`.
+- `num-users` is an `[]int`: a single integer or a TOML array such as `[100, 200, 400]`, which
+  runs the workload once per step.
+- Config file keys must match the flag names exactly. Viper silently ignores unknown keys, so a
+  camelCase key like `runTime` leaves the setting at its default rather than erroring.
+- The example configs in `configs/` are untracked local files, not part of the repo.
 
 ## Security / Secrets
 
