@@ -18,7 +18,7 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": 2,
+  "id": null,
   "links": [],
   "panels": [
     {
@@ -34,7 +34,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -85,7 +85,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "increase(operations_total{operation=~\"$operation\", phase=\"Steady\"}[$__range])",
@@ -102,7 +102,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -153,7 +153,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "increase(operations_failed_total{job=\"spectroperf\", operation=~\"$operation\", phase=\"Steady\"}[$__range])",
@@ -170,7 +170,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -223,7 +223,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le, operation))",
@@ -236,7 +236,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le))",
@@ -253,7 +253,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -306,7 +306,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le, operation))",
@@ -319,7 +319,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"Steady\"}[$__range])) by (le))",
@@ -336,7 +336,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -417,7 +417,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "rate(operations_total{operation=~\"$operation\", phase=\"Steady\"}[1m])",
@@ -430,7 +430,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "sum(rate(operations_total{operation=~\"$operation\", phase=\"Steady\"}[1m]))",
@@ -447,7 +447,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -510,7 +510,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "disableTextWrap": false,
               "editorMode": "code",
@@ -546,7 +546,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -597,7 +597,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "increase(operations_total{operation=~\"$operation\", phase=\"RampUp\"}[$__range])",
@@ -614,7 +614,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -665,7 +665,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "increase(operations_failed_total{job=\"spectroperf\", operation=~\"$operation\", phase=\"RampUp\"}[$__range])",
@@ -682,7 +682,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -735,7 +735,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le, operation))",
@@ -748,7 +748,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le))",
@@ -765,7 +765,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -818,7 +818,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le, operation))",
@@ -831,7 +831,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampUp\"}[$__range])) by (le))",
@@ -848,7 +848,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -929,7 +929,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "rate(operations_total{operation=~\"$operation\", phase=\"RampUp\"}[1m])",
@@ -942,7 +942,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "sum(rate(operations_total{operation=~\"$operation\", phase=\"RampUp\"}[1m]))",
@@ -973,7 +973,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1025,7 +1025,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "increase(operations_total{operation=~\"$operation\", phase=\"RampDown\"}[$__range])",
@@ -1042,7 +1042,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1094,7 +1094,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "increase(operations_failed_total{job=\"spectroperf\", operation=~\"$operation\", phase=\"RampDown\"}[$__range])",
@@ -1111,7 +1111,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1165,7 +1165,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le, operation))",
@@ -1178,7 +1178,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.99, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le))",
@@ -1195,7 +1195,7 @@
         {
           "datasource": {
             "type": "prometheus",
-            "uid": "ce37u7dod83cwa"
+            "uid": "spectroperf-prometheus"
           },
           "fieldConfig": {
             "defaults": {
@@ -1249,7 +1249,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le, operation))",
@@ -1262,7 +1262,7 @@
             {
               "datasource": {
                 "type": "prometheus",
-                "uid": "ce37u7dod83cwa"
+                "uid": "spectroperf-prometheus"
               },
               "editorMode": "code",
               "expr": "histogram_quantile(0.50, sum(rate(operation_duration_milliseconds_bucket{operation=~\"$operation\", phase=\"RampDown\"}[$__range])) by (le))",
@@ -1298,21 +1298,21 @@
         },
         "datasource": {
           "type": "prometheus",
-          "uid": "ce37u7dod83cwa"
+          "uid": "spectroperf-prometheus"
         },
-        "definition": "label_values(operations_total, operation)",
+        "definition": "operations_total",
         "includeAll": true,
         "label": "Operation",
         "multi": true,
         "name": "operation",
         "options": [],
         "query": {
-          "qryType": 1,
-          "query": "label_values(operations_total, operation)",
+          "qryType": 4,
+          "query": "operations_total",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
-        "regex": "",
+        "regex": "/operation=\"([^\"]+)\"/",
         "sort": 1,
         "type": "query"
       }

@@ -1,0 +1,27 @@
+# Prometheus config for the containerised monitoring stack (docker-compose.yml).
+#
+# The only difference from the ../prometheus.yml used when running the Prometheus
+# binary directly is the spectroperf target: spectroperf runs on the host, not in
+# a container, so it is reached via host.docker.internal rather than localhost.
+
+global:
+  scrape_interval: 15s
+
+  external_labels:
+    monitor: 'spectroperf-monitor'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    scrape_interval: 5s
+
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'spectroperf'
+    scrape_interval: 5s
+
+    static_configs:
+      # spectroperf runs on the host and exposes metrics on port 2112.
+      - targets: ['host.docker.internal:2112']
+        labels:
+          group: 'spectroperf'

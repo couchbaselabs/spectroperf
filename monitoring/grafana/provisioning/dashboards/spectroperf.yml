@@ -1,0 +1,16 @@
+# Imports every dashboard mounted into /var/lib/grafana/dashboards at startup.
+
+apiVersion: 1
+
+providers:
+  - name: spectroperf
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    # Panels can still be tweaked in the UI; those edits live in Grafana's
+    # database and do not write back to the JSON file in this repo.
+    allowUiUpdates: true
+    updateIntervalSeconds: 10
+    options:
+      path: /var/lib/grafana/dashboards

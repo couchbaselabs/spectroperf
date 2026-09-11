@@ -1,0 +1,13 @@
+# Wires Grafana to the Prometheus container at startup, with the uid that every
+# panel in Grafana_dashboard.json references.
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: spectroperf-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

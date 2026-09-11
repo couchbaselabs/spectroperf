@@ -228,20 +228,38 @@ Spectroperf produces Prometheus metrics on:
 All three are labelled with `operation`, `phase` (`RampUp`, `Steady` or `RampDown`) and `users`
 (the `num-users` value for the step), so a stepped run can be broken down per step.
 
-These are exposed on port `2112` and can be scraped by running Prometheus with the config file in this repo: 
+These are exposed on port `2112`.
+
+### Prometheus and Grafana
+
+The repo ships a pre-wired monitoring stack, so there is nothing to install or click through:
 
 ```
-prometheus --config.file=prometheus.yml
+make monitoring
 ```
 
-This will scrape the metrics from Spectroperf at `localhost:2112` and export them on `localhost:9090`. 
+That starts Prometheus and Grafana in containers, already scraping spectroperf and already
+serving the dashboard. Docker is the only prerequisite - the images are pulled for you, and
+neither Prometheus nor Grafana needs to be installed on your machine.
 
-### Grafana
+- Grafana: <http://localhost:3000> - opens straight onto the dashboard, no login
+- Prometheus: <http://localhost:9090>
 
-The best way to visualise these metrics is using Grafana, this can be done as follows: 
+Run spectroperf as usual while the stack is up and the panels fill in; metrics survive a
+restart of the stack. `make monitoring-down` stops it, `make monitoring-logs` tails the
+container logs, and `make monitoring-clean` also discards the scraped metrics.
 
-1. Run Grafana locally and add a new DataSource with the `Prometheus Server Url = http://localhost:9090` (obviously this will be different if you edit the Prometheus config file)
-2. Import the Grafana dashboard from the Json definition in: `Grafana_dashboard.json`
+Spectroperf itself deliberately stays a host binary rather than joining the stack: it is the
+thing you rebuild and rerun, so keeping it out means no image rebuild between runs. Prometheus
+reaches it at `host.docker.internal:2112` (see `monitoring/prometheus.yml`).
+
+The stack is defined by `docker-compose.yml` and the files under `monitoring/`: the Prometheus
+scrape config, and the Grafana provisioning that creates the datasource and imports
+`Grafana_dashboard.json` at startup. To point Grafana at the dashboard after editing it, restart
+the stack - or edit panels in the UI, where changes live in Grafana's database rather than
+writing back to the JSON.
+
+### The dashboard
 
 The dashboard is split into three sections `ramp-up`, `steady` and `ramp-down`, matching the
 `phase` label on the metrics. The `ramp-up` phase is the first `ramp-time` of the workload and
@@ -255,6 +273,19 @@ new operation appears in the variable picker, in the per-operation percentile pa
 own repeated duration panel. Use the picker to narrow the dashboard to a subset of operations.
 
 Feel free to edit the dashboard to perform the analysis required, this definition was just given as a starting point. 
+
+### Without Docker
+
+If you would rather run the binaries yourself, `prometheus.yml` in the repo root is the same
+scrape config pointing at `localhost:2112`:
+
+```
+prometheus --config.file=prometheus.yml
+```
+
+Grafana then needs doing by hand: add a Prometheus datasource with the uid
+`spectroperf-prometheus` and the URL `http://localhost:9090`, then import
+`Grafana_dashboard.json`. The uid has to match, since the dashboard panels reference it.
 
 ## Artifacts
 

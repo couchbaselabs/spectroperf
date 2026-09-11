@@ -1,3 +1,10 @@
+# Scrape config for running the Prometheus binary directly on your machine
+# (`prometheus --config.file=prometheus.yml`).
+#
+# The containerised stack started by `make monitoring` does not use this file:
+# it uses monitoring/prometheus.yml, which differs only in reaching spectroperf
+# on the host via host.docker.internal rather than localhost.
+
 global:
   scrape_interval:     15s # By default, scrape targets every 15 seconds.
 
