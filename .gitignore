@@ -1,0 +1,36 @@
+# Compiled binary (the root package builds to ./spectroperf)
+/spectroperf
+/spectroperf.exe
+*.test
+
+# Cross-compile and local deploy staging directories
+/linux-amd64/
+/spectroperf-linux-amd64/
+
+# Coverage output from `make cover`
+/cover.out
+
+# Prometheus TSDB, written into the repo root by
+# `prometheus --config.file=prometheus.yml`
+/data/
+
+# Spectroperf run artefacts: each results directory holds config.toml,
+# metrics.json and spectroperf.log. By default the directory is named with a UTC
+# timestamp of the run start, e.g. 2025-06-12-07:23. A run started with
+# `--results <name>` writes to <name>/ instead, so add that name here too.
+/20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]-[0-9][0-9]:[0-9][0-9]/
+/results/
+/testing/
+/direct/
+/gateway/
+
+# Local example configs. These hold real cluster endpoints, passwords and API
+# keys, so they are kept out of the repo. See the Config file section of
+# README.md for the format. Remove this entry only once they are sanitised.
+/configs/
+
+# Python virtualenv
+/venv/
+
+# macOS
+.DS_Store
