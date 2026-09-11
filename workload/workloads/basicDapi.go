@@ -36,7 +36,7 @@ type Doc struct {
 	RandString string
 }
 
-func NewBasicDapi(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) basicDapi {
+func NewBasicDapi(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) workload.Workload {
 	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
 
 	return basicDapi{

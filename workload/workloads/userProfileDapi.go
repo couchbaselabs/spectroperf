@@ -31,7 +31,7 @@ type userProfileDapi struct {
 	cluster    *gocb.Cluster
 }
 
-func NewUserProfileDapi(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) userProfileDapi {
+func NewUserProfileDapi(logger *zap.Logger, config *configuration.Config, cluster *gocb.Cluster) workload.Workload {
 	scope := cluster.Bucket(config.Bucket).Scope(config.Scope)
 
 	return userProfileDapi{

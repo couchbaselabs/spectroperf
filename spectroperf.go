@@ -176,18 +176,9 @@ func startSpectroperf() {
 		logger.Fatal("Failed to connect to Bucket", zap.String("Bucket", config.Bucket), zap.String("error", err.Error()))
 	}
 
-	var w workload.Workload
-	switch config.Workload {
-	case "user-profile":
-		w = workloads.NewUserProfile(logger, config, cluster)
-	case "user-profile-dapi":
-		w = workloads.NewUserProfileDapi(logger, config, cluster)
-	case "basic-dapi":
-		w = workloads.NewBasicDapi(logger, config, cluster)
-	case "basic":
-		w = workloads.NewBasic(logger, config, cluster)
-	default:
-		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload))
+	w, err := workloads.New(config.Workload, logger, config, cluster)
+	if err != nil {
+		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload), zap.Strings("known workloads", workloads.Names()))
 	}
 
 	markovChain, err := configuration.CreateMarkovChain(logger, config, w.Operations(), w.Probabilities())
