@@ -1,5 +1,10 @@
 export GOPATH := $(shell go env GOPATH)
 
+# Builds ./spectroperf, the binary the README and AGENTS.md invoke.
+.PHONY: build
+build:
+	go build -o spectroperf .
+
 devsetup:
 	go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0
 

@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	gotel "github.com/couchbase/gocb-opentelemetry"
@@ -54,6 +55,13 @@ func init() {
 	rootCmd.Flags().StringVar(&cfgFile, "config-file", "", "path to configuration file")
 
 	configFlags := configuration.NewFlagSet()
+
+	// The configuration package cannot import the registry, so the list of workload
+	// names is stamped into the flag help here, where both are already in scope.
+	if workloadFlag := configFlags.Lookup("workload"); workloadFlag != nil {
+		workloadFlag.Usage = fmt.Sprintf("workload to run, one of: %s", strings.Join(workloads.Names(), ", "))
+	}
+
 	rootCmd.Flags().AddFlagSet(configFlags)
 	cobra.CheckErr(configuration.BindFlagSet(configFlags))
 }
@@ -150,6 +158,12 @@ func startSpectroperf() {
 
 	logLevel.SetLevel(parsedLogLevel)
 
+	// Checked up front: the cluster connection and bucket wait below take seconds to
+	// fail, and would otherwise mask a simple typo in --workload.
+	if err := workloads.Validate(config.Workload); err != nil {
+		logger.Fatal("invalid workload", zap.Error(err))
+	}
+
 	execConfig, err := configuration.CreateExecutionConfig(logger, config)
 	if err != nil {
 		logger.Fatal("failed to create execution config", zap.Error(err))
@@ -178,7 +192,7 @@ func startSpectroperf() {
 
 	w, err := workloads.New(config.Workload, logger, config, cluster)
 	if err != nil {
-		logger.Fatal("Unknown workload type", zap.String("workload", config.Workload), zap.Strings("known workloads", workloads.Names()))
+		logger.Fatal("failed to create workload", zap.Error(err))
 	}
 
 	markovChain, err := configuration.CreateMarkovChain(logger, config, w.Operations(), w.Probabilities())
